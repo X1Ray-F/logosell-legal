@@ -17,6 +17,17 @@ h1{font-size:clamp(38px,7vw,64px);letter-spacing:-1px;margin-bottom:14px}
 .cta{display:inline-block;background:var(--emer2);color:var(--dark);font-weight:700;text-decoration:none;padding:15px 34px;border-radius:99px;font-size:17px;box-shadow:0 10px 30px rgba(47,183,143,.3);transition:transform .15s}
 .cta:hover{transform:translateY(-2px)}
 .soon{color:#9fbcb2;font-size:14px;margin-top:14px}
+.wl{max-width:440px;margin:0 auto}
+.wl-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.wl input{flex:1 1 200px;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(47,183,143,.35);border-radius:99px;padding:15px 20px;font-size:16px;color:var(--ink);outline:none}
+.wl input::placeholder{color:#8fb0a6}
+.wl input:focus{border-color:var(--emer2)}
+.wl button{flex:0 0 auto;background:var(--emer2);color:var(--dark);font-weight:700;border:none;cursor:pointer;padding:15px 30px;border-radius:99px;font-size:16px;box-shadow:0 10px 30px rgba(47,183,143,.3);transition:transform .15s}
+.wl button:hover{transform:translateY(-2px)}
+.wl button:disabled{opacity:.6;cursor:default;transform:none}
+.wl-city{margin-top:12px}
+.wl-msg{min-height:22px;margin-top:16px;font-size:15px;color:#CFE9E0}
+.wl-msg.err{color:#f0a58f}
 .feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:56px 0}
 .card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:22px;text-align:left}
 .card h3{color:var(--gold);font-size:16px;margin-bottom:6px}
@@ -31,8 +42,15 @@ h1{font-size:clamp(38px,7vw,64px);letter-spacing:-1px;margin-bottom:14px}
 <p class="tag">The invite-only UK marketplace built on trust.</p>
 <p class="sub">Buy, sell and give with verified members. Meet in person. No online payments to lose. No faceless strangers. No scams.</p>
 <div class="pills"><span class="pill">✦ Invite-only</span><span class="pill">✦ Verified members</span><span class="pill">✦ Meet in person</span><span class="pill">✦ No scams</span></div>
-<a class="cta" href="mailto:support@logosell.app?subject=Logosell%20invite%20request">Request an invite</a>
-<p class="soon">Coming soon to Google Play</p>
+<form class="wl" id="wl" autocomplete="on">
+<div class="wl-row">
+<input id="wl-email" type="email" name="email" placeholder="Your email address" required aria-label="Email address">
+<button type="submit" id="wl-btn">Join the waitlist</button>
+</div>
+<input class="wl-city" id="wl-city" type="text" name="city" placeholder="Your city (optional)" aria-label="City" style="width:100%">
+<p class="wl-msg" id="wl-msg" role="status" aria-live="polite"></p>
+</form>
+<p class="soon">Invite-only · we'll email you a code · coming soon to Google Play</p>
 <div class="feat">
 <div class="card"><h3>For Sale</h3><p>Real things, from real people, right near you.</p></div>
 <div class="card"><h3>Services</h3><p>Find trusted local skills and help.</p></div>
@@ -43,4 +61,37 @@ h1{font-size:clamp(38px,7vw,64px);letter-spacing:-1px;margin-bottom:14px}
 © 2026 Logosell · United Kingdom<br>
 <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms &amp; Conditions</a> · <a href="mailto:support@logosell.app">support@logosell.app</a>
 </div>
-</div></body></html>
+</div>
+<script>
+(function(){
+  var URL_="https://ppqormwtsuprottekulj.supabase.co/rest/v1/rpc/join_waitlist";
+  var ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcW9ybXd0c3Vwcm90dGVrdWxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjQxOTksImV4cCI6MjA4NzEwMDE5OX0.j8fddn6pJ4Z6MnHYAtidGdv9HFlhknvjdfpu0rSmEfU";
+  var ref=new URLSearchParams(location.search).get("ref")||null;
+  var f=document.getElementById("wl"),msg=document.getElementById("wl-msg"),btn=document.getElementById("wl-btn");
+  f.addEventListener("submit",function(e){
+    e.preventDefault();
+    var email=document.getElementById("wl-email").value.trim();
+    var city=document.getElementById("wl-city").value.trim();
+    if(!email){return;}
+    btn.disabled=true;btn.textContent="Joining…";msg.className="wl-msg";msg.textContent="";
+    fetch(URL_,{method:"POST",headers:{"apikey":ANON,"Authorization":"Bearer "+ANON,"Content-Type":"application/json","Content-Profile":"markety"},
+      body:JSON.stringify({p_email:email,p_city:city||null,p_referred_by:ref})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d.ok){
+        f.querySelector(".wl-row").style.display="none";
+        document.getElementById("wl-city").style.display="none";
+        msg.textContent=d.already?"You're already on the list — hang tight, your invite is coming. 🎟️":"You're on the waitlist! 🎉 We'll email your invite code soon.";
+      }else{
+        btn.disabled=false;btn.textContent="Join the waitlist";
+        msg.className="wl-msg err";msg.textContent="Please enter a valid email address.";
+      }
+    })
+    .catch(function(){
+      btn.disabled=false;btn.textContent="Join the waitlist";
+      msg.className="wl-msg err";msg.textContent="Something went wrong — please try again.";
+    });
+  });
+})();
+</script>
+</body></html>
