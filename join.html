@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Join Logosell — your invite</title>
+<meta name="description" content="You're invited to Logosell, the invite-only UK marketplace. Grab your code and download the app.">
+<style>
+:root{--emer:#1C5B4E;--emer2:#2FB78F;--gold:#CBA75A;--ink:#F3F0EA;--dark:#0f1c17}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:radial-gradient(120% 100% at 50% 0%,#14261f,#0b1512);min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:56px 24px 72px;text-align:center}
+.logo{width:70px;height:70px;background:var(--gold);transform:rotate(45deg);border-radius:15px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:26px;box-shadow:0 12px 40px rgba(203,167,90,.25)}
+.logo span{transform:rotate(-45deg);color:var(--dark);font-weight:800;font-size:34px}
+h1{font-size:clamp(30px,6vw,44px);letter-spacing:-.5px;margin-bottom:10px}
+.tag{color:#CFE9E0;margin:0 auto 34px;max-width:400px}
+.codebox{background:rgba(255,255,255,.06);border:1.5px dashed rgba(47,183,143,.55);border-radius:18px;padding:22px;margin-bottom:14px}
+.codelbl{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#9fbcb2;margin-bottom:8px}
+.code{font-size:clamp(30px,8vw,44px);font-weight:800;letter-spacing:4px;color:var(--gold);font-family:ui-monospace,Menlo,Consolas,monospace}
+.copy{margin-top:14px;background:rgba(47,183,143,.14);border:1px solid rgba(47,183,143,.4);color:#CFE9E0;border-radius:99px;padding:11px 22px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s}
+.copy:hover{transform:translateY(-1px)}
+.copy.ok{background:var(--emer2);color:var(--dark);border-color:var(--emer2)}
+.cta{display:inline-flex;align-items:center;gap:10px;background:var(--emer2);color:var(--dark);font-weight:700;text-decoration:none;padding:16px 30px;border-radius:99px;font-size:17px;box-shadow:0 10px 30px rgba(47,183,143,.3);margin:30px 0 8px;transition:transform .15s}
+.cta:hover{transform:translateY(-2px)}
+.soon{color:#9fbcb2;font-size:13px}
+.steps{text-align:left;margin:36px auto 0;max-width:380px}
+.step{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+.num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--gold);color:var(--dark);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:14px}
+.step p{color:#b7ccc4;font-size:14px;padding-top:3px}
+.step b{color:var(--ink)}
+.foot{border-top:1px solid rgba(255,255,255,.1);padding-top:24px;margin-top:44px;color:#7f978e;font-size:13px}
+.foot a{color:#CFE9E0;text-decoration:none;margin:0 8px}
+</style></head>
+<body><div class="wrap">
+<div class="logo"><span>L</span></div>
+<h1>You're invited 🎟️</h1>
+<p class="tag">Welcome to <b>Logosell</b> — the invite-only UK marketplace. Here's your code to get in.</p>
+
+<div class="codebox">
+  <div class="codelbl">Your invite code</div>
+  <div class="code" id="code">FOUNDER</div>
+  <button class="copy" id="copy">📋 Copy code</button>
+</div>
+
+<a class="cta" id="play" href="https://play.google.com/store/apps/details?id=uk.marketplace.app">▶ Get it on Google Play</a>
+<p class="soon">Launching soon — if the store link isn't live yet, it will be shortly.</p>
+
+<div class="steps">
+  <div class="step"><div class="num">1</div><p><b>Copy your code</b> above (or remember it).</p></div>
+  <div class="step"><div class="num">2</div><p><b>Install Logosell</b> from Google Play.</p></div>
+  <div class="step"><div class="num">3</div><p><b>Open the app</b>, tap “I have an invite”, and <b>paste the code</b>.</p></div>
+</div>
+
+<div class="foot">
+  © 2026 Logosell · United Kingdom<br>
+  <a href="index.html">Home</a> · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+</div>
+</div>
+<script>
+(function(){
+  var code=(new URLSearchParams(location.search).get("code")||"FOUNDER").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,24)||"FOUNDER";
+  document.getElementById("code").textContent=code;
+  var btn=document.getElementById("copy");
+  btn.addEventListener("click",function(){
+    var done=function(){btn.textContent="✓ Copied!";btn.classList.add("ok");setTimeout(function(){btn.textContent="📋 Copy code";btn.classList.remove("ok");},2000);};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(code).then(done,done);}
+    else{var t=document.createElement("textarea");t.value=code;document.body.appendChild(t);t.select();try{document.execCommand("copy");}catch(e){}document.body.removeChild(t);done();}
+  });
+})();
+</script>
+</body></html>
