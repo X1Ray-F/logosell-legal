@@ -59,7 +59,7 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
   </div>
 </div>
 <div class="hud"><span>Length <b id="len">1</b></span><span>Best <b class="gold" id="best">0</b></span></div>
-<p class="hint">Collect the ◆. Don't hit the walls or yourself.</p>
+<p class="hint">Collect the ◆. Pass through the walls — just don't bite yourself.</p>
 
 <div class="foot">
   © 2026 Logosell · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
@@ -104,7 +104,7 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
     dir = { x: 1, y: 0 };
     nextDir = dir;
     placeFood();
-    tickMs = 130;
+    tickMs = 175;               // slower start (higher = slower)
     acc = 0;
     lenEl.textContent = snake.length;
   }
@@ -135,15 +135,14 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
 
   function step() {
     dir = nextDir;
-    var head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-    // walls
-    if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) return gameOver();
+    // walls wrap around — pass straight through to the opposite side
+    var head = { x: (snake[0].x + dir.x + GRID) % GRID, y: (snake[0].y + dir.y + GRID) % GRID };
     // self
     for (var i = 0; i < snake.length; i++) if (snake[i].x === head.x && snake[i].y === head.y) return gameOver();
     snake.unshift(head);
     if (head.x === food.x && head.y === food.y) {
       placeFood();
-      if (tickMs > 70) tickMs -= 3;         // speed up gently
+      if (tickMs > 110) tickMs -= 2;        // speed up very gently, and never too fast
       lenEl.textContent = snake.length;
     } else {
       snake.pop();
