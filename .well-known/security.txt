@@ -1,0 +1,4 @@
+Contact: mailto:flaviuseduard18@gmail.com
+Expires: 2027-08-14T00:00:00Z
+Preferred-Languages: ro, en
+Canonical: https://logosell.app/.well-known/security.txt
