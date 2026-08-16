@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Cvl+BTdvWNn88t17W6h0Wtu8kUYcJKTXA/QmqDcIRSU='; style-src 'sha256-upwpfAji6wRya+HLpx/ylTBjd3Id595n9H1HkZgrdE0='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Email confirmed · Logosell</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="any">
+<meta name="theme-color" content="#0b1512">
+<style>:root{color-scheme:dark light}body{background:#0b1512;color:#9fbcb2;font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 20px}main{max-width:420px;text-align:center}h1{color:#fff;font-size:22px;margin:0 0 10px;font-weight:600}p{margin:0 0 22px}a.btn{display:inline-block;background:#2FB78F;color:#06120e;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:10px}.tick{width:44px;height:44px;margin:0 auto 18px;border-radius:50%;background:#123026;color:#2FB78F;font-size:24px;line-height:44px}.small{font-size:13px;color:#6d8a81;margin:22px 0 0}@media(prefers-color-scheme:light){body{background:#fff;color:#4a5c56}h1{color:#10241d}.tick{background:#e6f5ef}.small{color:#8ba39a}}</style>
+</head><body>
+<main>
+  <div class="tick" id="i" aria-hidden="true">✓</div>
+  <h1 id="t">Email confirmed</h1>
+  <p id="m">Your Logosell account is verified. Open the app and sign in.</p>
+  <a class="btn" id="b" href="logosell://">Open Logosell</a>
+  <p class="small">If the button does nothing, open Logosell from your home screen — the confirmation is already done.</p>
+</main>
+<script>
+(function () {
+  var raw = location.hash.slice(1);
+  // The link lands here carrying a session in the fragment. Strip it before
+  // anything else: a URL that is copied, shared or restored from history must
+  // not carry credentials with it.
+  if (raw) history.replaceState(null, '', location.pathname);
+  var p = new URLSearchParams(raw);
+  var t = document.getElementById('t'), m = document.getElementById('m'),
+      b = document.getElementById('b'), i = document.getElementById('i');
+
+  var err = p.get('error_description') || p.get('error');
+  if (err) {
+    i.textContent = '!';
+    t.textContent = 'That link did not work';
+    m.textContent = err + '. Confirmation links expire — open Logosell and ask for a new one.';
+    return;
+  }
+
+  // Only signup exists in the app today; the rest are here so a future flow
+  // does not land on wrong wording.
+  var BY_TYPE = {
+    signup: ['Email confirmed', 'Your Logosell account is verified. Open the app and sign in.'],
+    invite: ['Invitation accepted', 'Open the app to finish setting up your account.'],
+    magiclink: ['You are signed in', 'Open the app to continue.'],
+    email_change: ['Email address updated', 'Your new address is confirmed. Open the app and sign in with it.'],
+    recovery: ['Identity confirmed', 'Open the app to set a new password.']
+  };
+  var type = p.get('type');
+  if (BY_TYPE[type]) { t.textContent = BY_TYPE[type][0]; m.textContent = BY_TYPE[type][1]; return; }
+
+  // No fragment at all — someone typed the URL, or the mail client stripped it.
+  if (!p.get('access_token') && !type) {
+    i.textContent = '·';
+    t.textContent = 'Nothing to confirm here';
+    m.textContent = 'Open this page from the link in your confirmation email.';
+    b.hidden = true;
+  }
+})();
+</script>
+</body></html>
