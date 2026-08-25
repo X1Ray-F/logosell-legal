@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.logosell",
+      "sha256_cert_fingerprints": [
+        "95:B1:18:1A:5A:29:87:68:4C:5E:19:8F:36:48:84:E5:74:16:30:D7:60:CC:3E:FF:36:46:08:C2:0B:EF:BF:3B"
+      ]
+    }
+  }
+]
