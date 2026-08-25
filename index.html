@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-wnoEn2miDS2RqCJ96JJFrqWKIBZrvW67sB1+eOVR1Qg='; style-src 'self' 'sha256-0V3MqQ5P5bQMHnz2pcEJxQ6owstcPfYMnT2bN70jRt0='; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-IRqEcVzWSV1MApIdqZTVSHZRk1Qs2Id4c/ksF+GbYMI=' 'sha256-MX5lbxs8X7EsJCyt8qLZ1V+OhsxxVW59y2HAO/5zNjg='; style-src 'self' 'sha256-0V3MqQ5P5bQMHnz2pcEJxQ6owstcPfYMnT2bN70jRt0='; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
@@ -245,5 +245,19 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
   reset();
   resize();
 })();
+</script>
+
+<!-- Cookie Consent -->
+<div id="cookie-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a1a; color:#fff; padding:16px 24px; z-index:9999; font-family:Inter,sans-serif; font-size:14px;">
+  <div style="max-width:800px; margin:0 auto; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+    <p style="flex:1; margin:0;">We use cookies to improve your experience. By continuing, you agree to our <a href="/privacy.html" style="color:#5bb89a;">Privacy Policy</a>.</p>
+    <button onclick="acceptCookies()" style="background:#5bb89a; color:#fff; border:none; padding:8px 20px; border-radius:6px; cursor:pointer; font-weight:600;">Accept</button>
+    <button onclick="declineCookies()" style="background:transparent; color:#999; border:1px solid #555; padding:8px 20px; border-radius:6px; cursor:pointer;">Decline</button>
+  </div>
+</div>
+<script>
+function acceptCookies() { localStorage.setItem('cookie_consent','accepted'); document.getElementById('cookie-banner').style.display='none'; }
+function declineCookies() { localStorage.setItem('cookie_consent','declined'); document.getElementById('cookie-banner').style.display='none'; }
+if (!localStorage.getItem('cookie_consent')) document.getElementById('cookie-banner').style.display='block';
 </script>
 </body></html>
