@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-9JfciLmm2f16/ALI2lD3vgxMYAn89RLrP5twDk5liBs='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logosell</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="icon" href="/favicon.ico" sizes="any">
+<meta name="theme-color" content="#0b1512">
+<meta property="og:site_name" content="Logosell">
+<meta property="og:title" content="Logosell — buy and sell nearby">
+<meta property="og:description" content="A UK marketplace built around meeting safely.">
+<meta property="og:image" content="https://logosell.app/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>:root{color-scheme:light dark}body{max-width:620px;margin:0 auto;padding:56px 20px;font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a1a;background:#fff;text-align:center}h1{font-size:24px;margin:0 0 8px}p{color:#555;margin:0 0 18px}a.btn{display:inline-block;background:#1C5B4E;color:#fff;text-decoration:none;padding:12px 22px;border-radius:999px;font-weight:600}a{color:#1C5B4E}.small{font-size:14px;color:#888;margin-top:28px}@media(prefers-color-scheme:dark){body{background:#111;color:#eee}p{color:#bbb}.small{color:#777}}</style>
+<script>(function(){
+  // App Links mean this file is only ever reached by somebody WITHOUT the app:
+  // Android verifies assetlinks.json and hands logosell.app/listing/... straight
+  // to the installed app before a browser is involved. So the only visitor here
+  // is a person who followed a shared link and cannot open it natively — and
+  // until now GitHub Pages showed them its own 404. Every listing ever shared
+  // led to a dead page.
+  var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var FN = 'https://ppqormwtsuprottekulj.supabase.co/functions/v1/';
+  var m = location.pathname.match(/^\/(listing|seller)\/([^\/?#]+)/);
+  if (m && UUID.test(m[2])) {
+    // Only a well-formed id is forwarded. Anything else falls through to the
+    // page below rather than being pasted into a URL we then send someone to.
+    location.replace(FN + (m[1] === 'listing' ? 'listing-page' : 'passport-page') + '?id=' + encodeURIComponent(m[2]));
+  }
+})();</script>
+</head>
+<body>
+<h1>This page has moved on</h1>
+<p>The link may be old, or the listing may have sold. Either way, there is plenty more.</p>
+<p><a class=btn href="https://logosell.app/">Go to Logosell</a></p>
+<p class=small><a href="/privacy.html">Privacy</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/delete-account.html">Delete your account</a></p>
+</body></html>
