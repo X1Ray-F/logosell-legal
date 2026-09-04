@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-9JfciLmm2f16/ALI2lD3vgxMYAn89RLrP5twDk5liBs='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-gY6MAkKXBJgdbKdcPstlT1uJcq7VPX+PYY6Kxe+9TR8='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Logosell</title>
@@ -25,12 +25,37 @@
     // Only a well-formed id is forwarded. Anything else falls through to the
     // page below rather than being pasted into a URL we then send someone to.
     location.replace(FN + (m[1] === 'listing' ? 'listing-page' : 'passport-page') + '?id=' + encodeURIComponent(m[2]));
+    return;
+  }
+  // /p/<code> is printed on the physical Founder Cards, which are already in
+  // people's hands. There is no pass page to redirect to and no edge function
+  // that renders one, so this shows the code and says what to do with it —
+  // the alternative being that every printed card leads to "page has moved on".
+  var pass = location.pathname.match(/^\/p\/([A-Za-z0-9][A-Za-z0-9-]{3,31})\/?$/);
+  if (pass) {
+    document.addEventListener('DOMContentLoaded', function () {
+      var g = document.getElementById('gone'), b = document.getElementById('pass');
+      var c = document.getElementById('code');
+      document.title = 'Founder Pass - Logosell';
+      if (c) { c.textContent = pass[1].toUpperCase(); }
+      if (g) { g.hidden = true; }
+      if (b) { b.hidden = false; }
+    });
   }
 })();</script>
 </head>
 <body>
+<div id=gone>
 <h1>This page has moved on</h1>
 <p>The link may be old, or the listing may have sold. Either way, there is plenty more.</p>
 <p><a class=btn href="https://logosell.app/">Go to Logosell</a></p>
+</div>
+<div id=pass hidden>
+<h1>Your Founder Pass</h1>
+<p>This is a real code from a Founder Card. Redeem it inside the app.</p>
+<p><b id=code></b></p>
+<p>Install Logosell, create your account, then open <b>Membership &rarr; Founder Pass</b> and enter the code above.</p>
+<p><a class=btn href="https://logosell.app/">Get Logosell</a></p>
+</div>
 <p class=small><a href="/privacy.html">Privacy</a> &middot; <a href="/terms.html">Terms</a> &middot; <a href="/delete-account.html">Delete your account</a></p>
 </body></html>
