@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dgO4cerCICnywZ/8UoOUeFp941w4Kxsvz9/iwsP8ErI='; style-src 'sha256-dpiwbdVP4H27T2/PZLoRXTSJGRbrjoFX5ntkZG9IRBI='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-UELBizK5MEWFCDVFHAktiHLNfCM/2oRx50dB5B9gKg0='; style-src 'sha256-dpiwbdVP4H27T2/PZLoRXTSJGRbrjoFX5ntkZG9IRBI='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -47,6 +47,13 @@ a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decorat
 <p class="foot"><a href="/">What is Logosell?</a></p>
 </div>
 
+<div id="offline" hidden>
+<h1>Couldn't check right now</h1>
+<p class="sub">This is a connection problem, not an answer. The meetup may be perfectly fine — we simply could not reach it.</p>
+<div class="card"><p class="flush">Try again in a moment. If you cannot reach the person you are worried about either, contact them directly. In an emergency in the UK, call 999.</p></div>
+<p class="foot"><a href="/">About Logosell</a></p>
+</div>
+
 <div id="plan" hidden>
 <h1 id="who"></h1>
 <p class="sub">They are meeting another Logosell member to buy or sell something in person, and asked you to know where.</p>
@@ -82,7 +89,7 @@ If you cannot reach <b id="n2"></b> and you are worried, call them. In an emerge
   var t = (location.search.match(/[?&]t=([0-9a-f]{32})(?:&|$)/) || [])[1];
 
   function show(id) {
-    ['loading', 'gone', 'plan'].forEach(function (n) {
+    ['loading', 'gone', 'offline', 'plan'].forEach(function (n) {
       var el = document.getElementById(n); if (el) el.hidden = (n !== id);
     });
   }
@@ -158,8 +165,16 @@ If you cannot reach <b id="n2"></b> and you are worried, call them. In an emerge
                'Content-Type': 'application/json', 'Content-Profile': 'markety' },
     body: JSON.stringify({ p_token: t }),
   })
-    .then(function (r) { return r.ok ? r.json() : null; })
+    // A failed REQUEST and an expired LINK are different facts, and this used
+    // to answer both with "this safety link has expired". Somebody on a train
+    // with no signal, checking whether their daughter got home, was told the
+    // thing was over — which reads as nothing to see here. The wrong failure
+    // mode for a page whose entire job is to say whether to worry.
+    .then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    })
     .then(render)
-    .catch(function () { show('gone'); });
+    .catch(function () { show('offline'); });
 })();</script>
 </body></html>
