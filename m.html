@@ -1,0 +1,147 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Fa0rvZrMDMVC/ggIrF22r+4bfSxe8XTRCf0KzKBZAkc='; style-src 'sha256-kS9wZOSOj0ZezH5VrSAqVKrUdMadFqiXn+ltZN+QBIA='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meetup — Logosell</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b1512">
+<style>:root{color-scheme:light dark}
+*{box-sizing:border-box}
+body{margin:0 auto;padding:28px 20px 56px;font:16px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;
+  color:#12211d;background:#fff;max-width:560px}
+h1{font-size:21px;margin:0 0 4px;line-height:1.25}
+.sub{color:#5d6b66;margin:0 0 22px;font-size:15px}
+.card{border:1px solid #dfe5e2;border-radius:14px;padding:18px;margin-bottom:14px}
+.state{border-radius:14px;padding:16px 18px;margin-bottom:18px}
+.state b{display:block;font-size:17px;margin-bottom:2px}
+.state span{font-size:14.5px;line-height:1.45;display:block}
+.ok{background:#e8f5ef;color:#14503c}
+.wait{background:#fdf3e2;color:#6b4a10}
+.done{background:#eef1f5;color:#3a4650}
+.stop{background:#fdeceb;color:#7a1f1a}
+.row{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid #eef1ef;font-size:15px}
+.row:last-child{border-bottom:0}
+.row span:first-child{color:#5d6b66;flex:0 0 auto}
+.row span:last-child{text-align:right;font-weight:600}
+a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decoration:none;
+  padding:13px 22px;border-radius:999px;font-weight:600;margin-top:6px}
+.foot{color:#8b968f;font-size:13px;margin-top:26px;line-height:1.5}
+.foot a{color:#1C5B4E}
+@media(prefers-color-scheme:dark){
+  body{background:#0e1613;color:#e8efec}
+  .sub{color:#93a29c}.card{border-color:#25332e}.row{border-color:#1c2825}
+  .row span:first-child{color:#93a29c}
+  .ok{background:#123328;color:#8fe0bf}.wait{background:#33280f;color:#f0cd86}
+  .done{background:#1c2530;color:#b9c6d2}.stop{background:#3a1714;color:#f3aaa3}
+  .foot{color:#6f7d77}}</style>
+</head>
+<body>
+<div id="loading"><p class="sub">Checking…</p></div>
+
+<div id="gone" hidden>
+<h1>This safety link has expired</h1>
+<p class="sub">Safety links stop working twelve hours after the meeting, and can be turned off sooner by the person who sent it.</p>
+<div class="card"><p style="margin:0">If you are worried about someone, contact them directly. In an emergency in the UK, call 999.</p></div>
+<p class="foot"><a href="/">What is Logosell?</a></p>
+</div>
+
+<div id="plan" hidden>
+<h1 id="who"></h1>
+<p class="sub">They are meeting another Logosell member to buy or sell something in person, and asked you to know where.</p>
+<div class="state wait" id="state"><b id="head"></b><span id="line"></span></div>
+<div class="card">
+  <div class="row"><span>Where</span><span id="spot"></span></div>
+  <div class="row"><span>When</span><span id="when"></span></div>
+  <div class="row"><span>Who with</span><span>Another Logosell member</span></div>
+</div>
+<a class="btn" id="maps" hidden rel="noreferrer noopener">Open the location in Maps</a>
+<p class="foot">
+We do not show you who <b id="n1"></b> is meeting — that person did not agree to be named to anyone else.
+There is no live location on this page, and this link stops working twelve hours after the meeting.
+<br><br>
+If you cannot reach <b id="n2"></b> and you are worried, call them. In an emergency in the UK, call 999.
+<br><br>
+<a href="/">About Logosell</a> · <a href="/privacy.html">Privacy</a>
+</p>
+</div>
+<script>(function () {
+  // The token is the whole credential and it is in the URL. Nothing here is
+  // secret: the anon key below is the same one compiled into the Android app,
+  // and markety.meetup_share_view answers only for a live 32-hex token,
+  // returning {} for anything unknown, expired or revoked.
+  //
+  // This page is static HTML on logosell.app rather than an edge function
+  // because Supabase rewrites text/html served from functions/v1 into
+  // text/plain with a sandbox CSP — anti-phishing on their shared domain. A
+  // browser shows the source code instead of the page. Measured, not assumed.
+  var FN = 'https://ppqormwtsuprottekulj.supabase.co/rest/v1/rpc/meetup_share_view';
+  var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcW9ybXd0c3Vwcm90dGVrdWxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjQxOTksImV4cCI6MjA4NzEwMDE5OX0.j8fddn6pJ4Z6MnHYAtidGdv9HFlhknvjdfpu0rSmEfU';
+  var t = (location.search.match(/[?&]t=([0-9a-f]{32})(?:&|$)/) || [])[1];
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function show(id) {
+    ['loading', 'gone', 'plan'].forEach(function (n) {
+      var el = document.getElementById(n); if (el) el.hidden = (n !== id);
+    });
+  }
+  function when(iso) {
+    if (!iso) return 'Time not set';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return 'Time not set';
+    return d.toLocaleString('en-GB', { weekday: 'long', day: 'numeric', month: 'long',
+      hour: '2-digit', minute: '2-digit' });
+  }
+
+  function render(v) {
+    if (!v || !v.spot) { show('gone'); return; }
+    var name = esc(v.sharer);
+    var cls = 'wait', head = name + ' has not arrived yet',
+        line = 'They plan to be there at the time below. Reload this page to check again.';
+
+    if (v.status === 'cancelled') {
+      cls = 'stop'; head = 'This meetup was called off';
+      line = name + ' cancelled it. If you are worried, contact them directly.';
+    } else if (v.status === 'completed') {
+      cls = 'done'; head = name + ' finished safely';
+      line = 'The meetup is marked complete. Nothing more to watch here.';
+    } else if (v.arrived === true) {
+      cls = 'ok'; head = name + ' arrived safely';
+      line = 'They checked in at the meeting place. Reload this page to check again.';
+    }
+
+    document.title = name + "'s meetup \u2014 Logosell";
+    document.getElementById('who').textContent = v.sharer + ' shared a meetup with you';
+    var st = document.getElementById('state');
+    st.className = 'state ' + cls;
+    document.getElementById('head').textContent = head;
+    document.getElementById('line').textContent = line;
+    document.getElementById('spot').textContent = v.spot;
+    document.getElementById('when').textContent = when(v.scheduled_at);
+    document.getElementById('n1').textContent = v.sharer;
+    document.getElementById('n2').textContent = v.sharer;
+
+    if (v.lat && v.lng) {
+      var a = document.getElementById('maps');
+      a.href = 'https://www.google.com/maps/search/?api=1&query=' + Number(v.lat) + ',' + Number(v.lng);
+      a.hidden = false;
+    }
+    show('plan');
+  }
+
+  if (!t) { show('gone'); return; }
+  fetch(FN, {
+    method: 'POST',
+    headers: { apikey: ANON, Authorization: 'Bearer ' + ANON,
+               'Content-Type': 'application/json', 'Content-Profile': 'markety' },
+    body: JSON.stringify({ p_token: t }),
+  })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(render)
+    .catch(function () { show('gone'); });
+})();</script>
+</body></html>

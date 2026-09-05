@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Gfmc6rTdEo4Oe3cjYME2/3Fq+GP5IG/k1Jkj5MNNZ/M='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-X4YX2OI+xirNqopH9k/Mq3z6Q2QrJ5DKLNjWl8w1fAI='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Logosell</title>
@@ -38,7 +38,13 @@
   // trying to find out whether somebody got home.
   var mt = location.pathname.match(/^\/m\/([0-9a-f]{32})\/?$/);
   if (mt) {
-    location.replace(FN + 'meetup-page?t=' + mt[1]);
+    // /m.html, NOT the edge function. Supabase rewrites text/html served from
+    // functions/v1 into text/plain with a sandbox CSP — anti-phishing on their
+    // shared domain — so a browser renders the source instead of the page.
+    // Measured with a probe that echoed four content types back: html and xml
+    // are rewritten, json and plain are not. A static file here is served as
+    // real HTML and fetches its own data.
+    location.replace('/m.html?t=' + mt[1]);
     return;
   }
   var pass = location.pathname.match(/^\/p\/([A-Za-z0-9][A-Za-z0-9-]{3,31})\/?$/);
