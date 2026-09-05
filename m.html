@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Fa0rvZrMDMVC/ggIrF22r+4bfSxe8XTRCf0KzKBZAkc='; style-src 'sha256-dpiwbdVP4H27T2/PZLoRXTSJGRbrjoFX5ntkZG9IRBI='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-dgO4cerCICnywZ/8UoOUeFp941w4Kxsvz9/iwsP8ErI='; style-src 'sha256-dpiwbdVP4H27T2/PZLoRXTSJGRbrjoFX5ntkZG9IRBI='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -51,6 +51,7 @@ a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decorat
 <h1 id="who"></h1>
 <p class="sub">They are meeting another Logosell member to buy or sell something in person, and asked you to know where.</p>
 <div class="state wait" id="state"><b id="head"></b><span id="line"></span></div>
+<div class="state stop" id="moved" hidden></div>
 <div class="card">
   <div class="row"><span>Where</span><span id="spot"></span></div>
   <div class="row"><span>When</span><span id="when"></span></div>
@@ -80,11 +81,6 @@ If you cannot reach <b id="n2"></b> and you are worried, call them. In an emerge
   var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcW9ybXd0c3Vwcm90dGVrdWxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjQxOTksImV4cCI6MjA4NzEwMDE5OX0.j8fddn6pJ4Z6MnHYAtidGdv9HFlhknvjdfpu0rSmEfU';
   var t = (location.search.match(/[?&]t=([0-9a-f]{32})(?:&|$)/) || [])[1];
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
   function show(id) {
     ['loading', 'gone', 'plan'].forEach(function (n) {
       var el = document.getElementById(n); if (el) el.hidden = (n !== id);
@@ -100,19 +96,33 @@ If you cannot reach <b id="n2"></b> and you are worried, call them. In an emerge
 
   function render(v) {
     if (!v || !v.spot) { show('gone'); return; }
-    var name = esc(v.sharer);
+    var name = v.sharer;
+
+    // Only one signal here cannot be produced by the other member: whether the
+    // SHARER checked in. meetups.status, spot_label, lat, lng and scheduled_at
+    // are all writable by either party, so the page must never turn them into
+    // reassurance or into a statement about who did what. It said "Ana
+    // cancelled it" and "Ana finished safely" off status alone, which handed
+    // the two calming messages to exactly the person this feature guards
+    // against.
     var cls = 'wait', head = name + ' has not arrived yet',
         line = 'They plan to be there at the time below. Reload this page to check again.';
 
-    if (v.status === 'cancelled') {
-      cls = 'stop'; head = 'This meetup was called off';
-      line = name + ' cancelled it. If you are worried, contact them directly.';
-    } else if (v.status === 'completed') {
-      cls = 'done'; head = name + ' finished safely';
-      line = 'The meetup is marked complete. Nothing more to watch here.';
+    if (v.arrived === true && v.status === 'completed') {
+      cls = 'done'; head = name + ' arrived and the meetup is finished';
+      line = 'They checked in at the meeting place, and the meetup has been closed.';
     } else if (v.arrived === true) {
       cls = 'ok'; head = name + ' arrived safely';
       line = 'They checked in at the meeting place. Reload this page to check again.';
+    } else if (v.status === 'cancelled') {
+      // No name, no agency. Either member can cancel, and the case worth
+      // worrying about is the one where the sharer did not.
+      cls = 'stop'; head = 'This meetup is no longer going ahead';
+      line = 'It was called off. That may not have been ' + name + "'s decision, and they did not check in — if you are worried, contact them.";
+    } else if (v.status === 'completed') {
+      // Closed without the sharer ever checking in. Do not call that safe.
+      cls = 'wait'; head = 'The meetup was closed, but ' + name + ' never checked in';
+      line = 'Someone marked it finished without ' + name + ' confirming they arrived. Contact them if you are unsure.';
     }
 
     document.title = name + "'s meetup \u2014 Logosell";
@@ -122,6 +132,13 @@ If you cannot reach <b id="n2"></b> and you are worried, call them. In an emerge
     document.getElementById('head').textContent = head;
     document.getElementById('line').textContent = line;
     document.getElementById('spot').textContent = v.spot;
+    // The plan moved after it was shared. An attacker cannot suppress this by
+    // editing the meetup, because editing the meetup is what sets it.
+    if (v.plan_changed === true) {
+      var w = document.getElementById('moved');
+      w.textContent = 'The place or time has changed since ' + name + ' shared this. What you see below is what they told you.';
+      w.hidden = false;
+    }
     document.getElementById('when').textContent = when(v.scheduled_at);
     document.getElementById('n1').textContent = v.sharer;
     document.getElementById('n2').textContent = v.sharer;
