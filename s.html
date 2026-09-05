@@ -1,0 +1,127 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-x2RQpO9gkvgljHRrEEUR1pyC7gcM0pOegrYYURga4Mc='; style-src 'sha256-4qZzinmlXEn6l+Q93nGpcJiIVgle5mMWmjEFI3xby18='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src https://ppqormwtsuprottekulj.supabase.co data:; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Logosell</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0b1512">
+<meta property="og:site_name" content="Logosell">
+<meta property="og:title" content="Logosell — buy and sell nearby">
+<meta property="og:description" content="A UK marketplace built around meeting safely.">
+<meta property="og:image" content="https://logosell.app/og-image.png">
+<style>:root{color-scheme:light dark}
+*{box-sizing:border-box}
+body{margin:0 auto;padding:28px 20px 56px;font:16px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;
+  color:#12211d;background:#fff;max-width:560px}
+h1{font-size:22px;margin:0 0 4px;line-height:1.25}
+.sub{color:#1C5B4E;font-weight:700;margin:0 0 18px;font-size:17px}
+.card{border:1px solid #dfe5e2;border-radius:14px;padding:18px;margin-bottom:16px}
+.muted{color:#5d6b66;font-size:15px}
+img{width:100%;border-radius:14px;margin-bottom:16px;display:block}
+a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decoration:none;
+  padding:13px 22px;border-radius:999px;font-weight:600;margin-top:6px}
+.foot{color:#8b968f;font-size:13px;margin-top:26px;line-height:1.5}
+.foot a{color:#1C5B4E}
+.flush{margin:0}
+@media(prefers-color-scheme:dark){
+  body{background:#0e1613;color:#e8efec}
+  .card{border-color:#25332e}.muted{color:#93a29c}.foot{color:#6f7d77}
+  .sub{color:#8fe0bf}}</style></head>
+<body>
+<div id="loading"><p class="muted">Loading…</p></div>
+
+<div id="gone" hidden>
+<h1>This isn't available</h1>
+<p class="muted">It may have sold, been removed, or be visible only to members of a private circle.</p>
+<a class="btn" href="https://logosell.app/">Browse Logosell</a>
+</div>
+
+<div id="offline" hidden>
+<h1>Couldn't load this</h1>
+<p class="muted">A connection problem, not an answer. Try again in a moment.</p>
+<a class="btn" href="https://logosell.app/">Go to Logosell</a>
+</div>
+
+<div id="item" hidden>
+<img id="img" hidden>
+<h1 id="t"></h1>
+<p class="sub" id="sub"></p>
+<div class="card"><p class="flush muted" id="body"></p></div>
+<p class="muted" id="meta"></p>
+<a class="btn" href="https://logosell.app/">Open in Logosell</a>
+<p class="foot">Logosell members meet in person to buy and sell. Nothing is paid through the app.
+<br><br><a href="/">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+</div>
+<script>(function () {
+  // Rendered here rather than by an edge function because Supabase rewrites
+  // text/html served from functions/v1 into text/plain with a sandbox CSP —
+  // measured, four content types echoed back — so listing-page and
+  // passport-page showed a browser their own source code.
+  //
+  // Nothing is lost by moving. Those functions composed per-item Open Graph
+  // tags that NO crawler has ever seen: /listing/<id> is a GitHub Pages 404
+  // that redirects in JavaScript, and crawlers do not run JavaScript, so a
+  // shared link has always previewed as the generic site card. Real per-item
+  // previews need server-side rendering on this domain; that is a hosting
+  // decision, not a reason to keep serving source code.
+  //
+  // The anon key below is the same one compiled into the Android app, and RLS
+  // decides what it can see: a hidden listing, or one in a private circle,
+  // returns nothing here exactly as it does in the app.
+  var BASE = 'https://ppqormwtsuprottekulj.supabase.co/rest/v1/';
+  var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcW9ybXd0c3Vwcm90dGVrdWxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MjQxOTksImV4cCI6MjA4NzEwMDE5OX0.j8fddn6pJ4Z6MnHYAtidGdv9HFlhknvjdfpu0rSmEfU';
+  var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var LEVELS = ['Unverified', 'Bronze', 'Silver', 'Gold'];
+
+  var q = location.search;
+  var kind = (q.match(/[?&]t=(listing|seller)(?:&|$)/) || [])[1];
+  var id = (q.match(/[?&]id=([0-9a-fA-F-]{36})(?:&|$)/) || [])[1];
+
+  function show(n) {
+    ['loading', 'gone', 'offline', 'item'].forEach(function (x) {
+      var el = document.getElementById(x); if (el) el.hidden = (x !== n);
+    });
+  }
+  function set(id2, text) { var el = document.getElementById(id2); if (el) el.textContent = text; }
+  function gbp(n) { return '\u00A3' + Number(n || 0).toLocaleString('en-GB'); }
+
+  if (!kind || !id || !UUID.test(id)) { show('gone'); return; }
+
+  var url = kind === 'listing'
+    ? BASE + 'listings?id=eq.' + id + '&select=title,description,price_gbp,images,city,condition,seller:profiles!listings_seller_id_fkey(display_name,verified)'
+    : BASE + 'profiles?id=eq.' + id + '&select=display_name,verification_level,verified,rating,rating_count,sales_count';
+
+  fetch(url, { headers: { apikey: ANON, Authorization: 'Bearer ' + ANON, 'Accept-Profile': 'markety' } })
+    .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+    .then(function (rows) {
+      var d = rows && rows[0];
+      // An empty result is RLS doing its job — sold, hidden, deleted, or in a
+      // circle this reader is not in. Not an error, and not a place to explain
+      // which of those it was.
+      if (!d) { show('gone'); return; }
+
+      if (kind === 'listing') {
+        document.title = d.title + ' \u2014 Logosell';
+        set('t', d.title);
+        set('sub', gbp(d.price_gbp) + (d.city ? ' \u00B7 ' + d.city : ''));
+        set('body', d.description || '');
+        var who = d.seller && d.seller.display_name;
+        set('meta', who ? ('Sold by ' + who + (d.seller.verified ? ' \u00B7 verified member' : '')) : '');
+        var im = (d.images || [])[0];
+        if (im) { var e = document.getElementById('img'); e.src = im; e.alt = d.title; e.hidden = false; }
+      } else {
+        var lvl = LEVELS[d.verification_level || 0] || LEVELS[0];
+        document.title = d.display_name + ' \u2014 Logosell';
+        set('t', d.display_name);
+        set('sub', lvl + (d.verified ? ' \u00B7 verified member' : ''));
+        var bits = [];
+        if (d.sales_count) bits.push(d.sales_count + ' completed deal' + (d.sales_count === 1 ? '' : 's'));
+        if (d.rating_count) bits.push(Number(d.rating).toFixed(1) + '\u2605 from ' + d.rating_count + ' review' + (d.rating_count === 1 ? '' : 's'));
+        set('body', bits.join(' \u00B7 '));
+        set('meta', 'Trust on Logosell is earned in the open \u2014 real deals, reviews, and members confirming one another.');
+      }
+      show('item');
+    })
+    .catch(function () { show('offline'); });
+})();</script>
+</body></html>

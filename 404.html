@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-X4YX2OI+xirNqopH9k/Mq3z6Q2QrJ5DKLNjWl8w1fAI='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jlaVKNeSr1oAjztSl38OuXLDVuDUo0SE3Wyj/Gz93RE='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Logosell</title>
@@ -22,9 +22,12 @@
   var FN = 'https://ppqormwtsuprottekulj.supabase.co/functions/v1/';
   var m = location.pathname.match(/^\/(listing|seller)\/([^\/?#]+)/);
   if (m && UUID.test(m[2])) {
-    // Only a well-formed id is forwarded. Anything else falls through to the
-    // page below rather than being pasted into a URL we then send someone to.
-    location.replace(FN + (m[1] === 'listing' ? 'listing-page' : 'passport-page') + '?id=' + encodeURIComponent(m[2]));
+    // /s.html, not the edge functions: Supabase rewrites text/html served from
+    // functions/v1 into text/plain with a sandbox CSP, so those pages showed a
+    // browser their own source code. Only a well-formed id is forwarded —
+    // anything else falls through to the page below rather than being pasted
+    // into a URL we then send someone to.
+    location.replace('/s.html?t=' + m[1] + '&id=' + encodeURIComponent(m[2]));
     return;
   }
   // /p/<code> is printed on the physical Founder Cards, which are already in
