@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-gY6MAkKXBJgdbKdcPstlT1uJcq7VPX+PYY6Kxe+9TR8='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Gfmc6rTdEo4Oe3cjYME2/3Fq+GP5IG/k1Jkj5MNNZ/M='; style-src 'sha256-dVk8grhOq5OjhyQiepEycVdu3nmMrO9dxWiYOWidbws='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Logosell</title>
@@ -31,6 +31,16 @@
   // people's hands. There is no pass page to redirect to and no edge function
   // that renders one, so this shows the code and says what to do with it —
   // the alternative being that every printed card leads to "page has moved on".
+  // /m/<token> is a safety link somebody sent to a friend or a parent. It has
+  // to open for a person with no app and no account, on whatever phone they
+  // have, which is exactly what this file is reached by. Straight through to
+  // the page rather than showing them "this page has moved on" while they are
+  // trying to find out whether somebody got home.
+  var mt = location.pathname.match(/^\/m\/([0-9a-f]{32})\/?$/);
+  if (mt) {
+    location.replace(FN + 'meetup-page?t=' + mt[1]);
+    return;
+  }
   var pass = location.pathname.match(/^\/p\/([A-Za-z0-9][A-Za-z0-9-]{3,31})\/?$/);
   if (pass) {
     document.addEventListener('DOMContentLoaded', function () {
