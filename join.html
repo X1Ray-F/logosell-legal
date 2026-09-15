@@ -1,14 +1,101 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/OTnMA07lJ+d9Nw98DrJxTfSM/o25p81E2R5ZcdmeKU='; style-src 'self' 'sha256-4FC80Yy/oZNtoX/1wswlHcNb7HwTaS+lGWSxooMYZVI='; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-OpiGGRQrdLp2htlKbZEPClDez9xcNTJ7JFB2yKKjmqE='; style-src 'self' 'sha256-xEllpSVIDbrWJHqYpR/VcCRJvAjw9Xltq9X4vPE/Uxg='; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Logosell</title>
-<meta http-equiv="refresh" content="0; url=/">
-<link rel="canonical" href="https://logosell.app/">
-<style>body{background:#0b1512;color:#9fbcb2;font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:80px 20px}a{color:#2FB78F;text-decoration:none}</style>
-</head><body>
-<p>Redirecting… <a href="/">Logosell</a></p>
-<script>location.replace('/');</script>
+<title>Join Logosell</title>
+<meta name="description" content="Logosell is a free UK marketplace for adults. Sign up in the app with your email. A code from a friend is optional.">
+<link rel="canonical" href="https://logosell.app/join">
+<meta name="theme-color" content="#0f1c17">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Join Logosell">
+<meta property="og:description" content="A free UK marketplace for adults, where members verify each other. Sign up in the app. A code from a friend is optional.">
+<meta property="og:url" content="https://logosell.app/join">
+<meta property="og:image" content="https://logosell.app/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://logosell.app/og-image.png">
+<style>
+:root{--emer:#1C5B4E;--emer2:#2FB78F;--gold:#CBA75A;--ink:#F3F0EA;--dark:#0f1c17}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:radial-gradient(120% 100% at 50% 0%,#14261f,#0b1512);min-height:100vh}
+body[data-play="soon"] .live,body[data-play="live"] .soon{display:none}
+.wrap{max-width:520px;margin:0 auto;padding:56px 20px 72px;text-align:center}
+.logo{width:70px;height:70px;background:var(--gold);transform:rotate(45deg);border-radius:15px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:26px;box-shadow:0 12px 40px rgba(203,167,90,.25)}
+.logo span{transform:rotate(-45deg);color:var(--dark);font-weight:800;font-size:34px}
+h1{font-size:clamp(30px,6vw,44px);letter-spacing:-.5px;margin-bottom:10px}
+.tag{color:#CFE9E0;margin:0 auto 30px;max-width:430px}
+.cta{display:inline-flex;align-items:center;gap:10px;background:var(--emer2);color:var(--dark);font-weight:700;text-decoration:none;padding:16px 30px;border-radius:99px;font-size:17px;box-shadow:0 10px 30px rgba(47,183,143,.3);margin:4px 0 8px;transition:transform .15s}
+.cta:hover{transform:translateY(-2px)}
+.note{color:#9fbcb2;font-size:14px;max-width:400px;margin:0 auto}
+.badge{display:inline-block;background:rgba(255,255,255,.06);border:1px solid rgba(47,183,143,.45);color:#CFE9E0;border-radius:99px;padding:10px 20px;font-size:15px;font-weight:600;margin-bottom:12px}
+.steps{list-style:none;counter-reset:s;text-align:left;margin:36px auto 34px;max-width:400px}
+.steps li{counter-increment:s;position:relative;padding:3px 0 0 42px;margin-bottom:18px;color:#b7ccc4;font-size:15px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--gold);color:var(--dark);font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center}
+.steps b{color:var(--ink)}
+.codebox{background:rgba(255,255,255,.05);border:1.5px dashed rgba(47,183,143,.5);border-radius:18px;padding:20px}
+.codelbl{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:#9fbcb2;margin-bottom:6px}
+.code{font-size:clamp(26px,7vw,36px);font-weight:800;letter-spacing:4px;color:var(--gold);font-family:ui-monospace,Menlo,Consolas,monospace;user-select:all;overflow-wrap:anywhere}
+.copy{margin-top:12px;background:rgba(47,183,143,.14);border:1px solid rgba(47,183,143,.4);color:#CFE9E0;border-radius:99px;padding:10px 20px;font-size:15px;font-weight:600;cursor:pointer;transition:transform .15s}
+.copy:hover{transform:translateY(-1px)}
+.copy.ok{background:var(--emer2);color:var(--dark);border-color:var(--emer2)}
+.codehint{color:#9fbcb2;font-size:13px;margin-top:12px}
+.foot{border-top:1px solid rgba(255,255,255,.1);padding-top:24px;margin-top:44px;color:#7f978e;font-size:13px}
+.foot a{color:#CFE9E0;text-decoration:none;margin:0 6px}
+.foot a:hover{color:#fff}
+</style></head>
+<!-- data-play: "soon" until the Play listing is public, then "live". Flipping it
+     needs no CSP change: the hashes cover the inline style and script blocks only. -->
+<body data-play="soon"><div class="wrap">
+<div class="logo"><span>L</span></div>
+<h1>Join Logosell</h1>
+<p class="tag">Free, and open to anyone over 18 in the UK. Trust is earned inside: members verify each other, and you can see how you're connected to anyone before you meet them.</p>
+
+<a class="cta live" href="https://play.google.com/store/apps/details?id=app.logosell">▶ Get it on Google Play</a>
+<p class="note soon"><span class="badge">Coming soon to Google Play</span><br>Logosell isn't in the store yet. When it is, the download button will be right here on this page.</p>
+
+<ol class="steps">
+  <li><b>Install Logosell</b> from Google Play.</li>
+  <li><b>Create your account</b> with your name, email, date of birth and your city or area. You must be 18 or over.</li>
+  <li><b>Turn on two-factor sign-in</b> with an authenticator app. Every account needs it, so yours stays yours.</li>
+</ol>
+
+<div class="codebox">
+  <div class="codelbl">Got a code? It's optional</div>
+  <div class="code" id="code">FOUNDER</div>
+  <button class="copy" id="copy" type="button">📋 Copy code</button>
+  <p class="codehint">When you sign up, tap “Someone gave me an invite code” and paste it. You don't need one to join. It just records who vouched for you.</p>
+</div>
+
+<div class="foot">
+  © 2026 Logosell · United Kingdom<br>
+  <a href="/">Home</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a> · <a href="mailto:support@logosell.app">support@logosell.app</a>
+</div>
+</div>
+<script>
+(function(){
+  var raw=new URLSearchParams(location.search).get("code")||"FOUNDER";
+  var code=raw.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,24)||"FOUNDER";
+  document.getElementById("code").textContent=code;
+  var btn=document.getElementById("copy");
+  function done(ok){
+    btn.textContent=ok?"✓ Copied":"Tap the code to select it";
+    btn.classList.toggle("ok",ok);
+    setTimeout(function(){btn.textContent="📋 Copy code";btn.classList.remove("ok");},2200);
+  }
+  btn.addEventListener("click",function(){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(function(){done(true);},function(){done(false);});
+      return;
+    }
+    var t=document.createElement("textarea"),ok=false;
+    t.value=code;document.body.appendChild(t);t.select();
+    try{ok=document.execCommand("copy");}catch(e){}
+    document.body.removeChild(t);done(ok);
+  });
+})();
+</script>
 </body></html>
