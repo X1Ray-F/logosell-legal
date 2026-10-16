@@ -59,33 +59,71 @@ deschide linkurile partajate în aplicație pe Android.
 
 Nimic din ce urmează nu l-am rulat eu.
 
-1. **Deno Deploy** — cont pe `deno.com/deploy` (login cu GitHub merge), apoi un
-   token din Account Settings → Access Tokens.
+1. **Deno Deploy — FĂCUT pe 2026-10-16.**
 
-   `deployctl` e instalat (1.13.1, `~/.local/bin/deployctl`). Desfășurarea e o
-   comandă, iar scriptul pregătit ia cheile din `.env`-ul de build fără să le
-   tipărească:
-
-   ```bash
-   export DENO_DEPLOY_TOKEN=<token>
-   bash /tmp/claude-1000/-home-xrayf/4fc30862-ee9e-42e5-8372-3648076fc6ba/scratchpad/deno-deploy.sh
+   ```
+   organizație : x1ray-f
+   aplicație   : logosell-web
+   regiune     : eu
+   producție   : https://logosell-web.x1ray-f.deno.net
+   consolă     : https://console.deno.com/x1ray-f/logosell-web
    ```
 
-   Sau direct, din `~/logosell/logosell-legal`:
+   **Capcana 1: `deployctl` nu mai merge.** Țintește Deno Deploy *Classic*, care
+   respinge un token din dashboard-ul nou cu
+   `APIError: The authorization token is not valid: The bearer token is invalid`.
+   Tokenul era bun; unealta era greșită. Platforma nouă se folosește prin
+   subcomanda din CLI-ul Deno: `deno deploy` (0.0.9908 în Deno 2.9.7). Vechiul
+   API `api.deno.com/v1` dă 401 pentru tokenul nou — tot aceeași despărțire.
+
+   **Capcana 2: detectarea automată alege `static`.** Rădăcina repo-ului e plină
+   de `.html`, deci `deno deploy create` detectează un site static
+   (`"mode":"static","staticDir":"."`) și **nu rulează niciodată `server/main.ts`**
+   — adică exact bug-ul pentru care există randorul. `--runtime-mode dynamic`
+   singur NU e de ajuns: configurația detectată câștigă. Trebuie
+   **`--do-not-use-detected-build-config`**. Verifică cu `--dry-run`: trebuie să
+   vezi `"mode":"dynamic","entrypoint":"server/main.ts"`.
+
+   Comanda care a funcționat, din `~/logosell/logosell-legal`:
 
    ```bash
-   deployctl deploy --project=logosell-web --entrypoint=server/main.ts \
-     --env="SUPABASE_URL=…" --env="SUPABASE_ANON_KEY=…" \
-     --exclude=.git,server/*_test.ts --prod
+   export DENO_DEPLOY_TOKEN=$(cat ~/.config/deno-deploy-token)   # mod 600
+   deno deploy --json --non-interactive --org x1ray-f --app logosell-web --prod \
+     --ignore '.git' --ignore 'server/*_test.ts'
    ```
-2. **Variabile de mediu** în proiect: `SUPABASE_URL` și `SUPABASE_ANON_KEY` —
-   aceleași valori `EXPO_PUBLIC_*` din `marketplace.env` din seif. Cheia anon e
-   publică prin natura ei (o conține și APK-ul), deci nu adaugă nicio expunere.
-   Fără ele, site-ul static servește normal, iar paginile de anunț răspund
-   „indisponibil" — direcția sigură.
-3. **Verifică pe subdomeniul `*.deno.dev`** înainte de DNS:
-   `curl -A "WhatsApp/2.23.20.0" https://<proiect>.deno.dev/listing/<uuid real>`
-4. **DNS la Namecheap.** Acum: `logosell.app` A → `185.199.108–111.153`
+
+   Variabilele de mediu sunt setate pe aplicație, nu la fiecare desfășurare:
+
+   ```bash
+   deno deploy env add SUPABASE_URL "$EXPO_PUBLIC_SUPABASE_URL" --org x1ray-f --app logosell-web
+   deno deploy env add SUPABASE_ANON_KEY "$EXPO_PUBLIC_SUPABASE_ANON_KEY" --secret --org x1ray-f --app logosell-web
+   ```
+
+   Tokenul **nu** se pune pe linia de comandă într-o sesiune Claude — ajunge în
+   contextul lui. Stă în `~/.config/deno-deploy-token` (mod 600); scriptul
+   `scratchpad/deno-deploy.sh` îl cere printr-o fereastră zenity dacă lipsește,
+   fiindcă prin `!` nu există TTY.
+
+2. **Verificat pe 2026-10-16** pe URL-ul de producție, cu User-Agent de Googlebot:
+
+   | cerere | rezultat |
+   |---|---|
+   | `/privacy.html` | 200 — fișierul static, neschimbat |
+   | `/sitemap.xml` | 200 `application/xml`, 4 URL-uri |
+   | `/hounslow`, `/camden` | 200, titluri randate din baza **live** |
+   | anunț inexistent | 404 |
+   | cale care nu e zonă | 404 prin `404.html` |
+
+   Antete pe o pagină randată: `content-security-policy` cu hash-ul de stil,
+   `referrer-policy: no-referrer`, `x-content-type-options: nosniff`,
+   `cache-control: public, max-age=300`.
+
+3. **Ce NU arată încă, și nu e vina codului:** live are zero anunțuri vizibile
+   public (2 active, ambele ascunse, niciunul cu coordonate), deci sitemap-ul are
+   doar cele 4 URL-uri statice și fiecare pagină de zonă e corect `noindex`.
+   Câștigul SEO începe de la primul anunț public.
+
+4. **DNS la Namecheap — RĂMAS DE FĂCUT.** Acum: `logosell.app` A → `185.199.108–111.153`
    (GitHub Pages), `www` CNAME → `x1ray-f.github.io`. Le înlocuiești cu ce indică
    Deno Deploy pentru domeniu propriu. Pages poate rămâne pornit — nu mai primește
    trafic.
