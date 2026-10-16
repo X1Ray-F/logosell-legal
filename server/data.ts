@@ -19,7 +19,7 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 export interface Env { url: string; anon: string }
 
 const LISTING_COLS =
-  'id,title,description,price_gbp,images,city,condition,created_at,' +
+  'id,title,description,price_gbp,images,city,condition,created_at,category_id,zone_slug,' +
   'seller:profiles!listings_seller_id_fkey(id,handle,display_name,verified,city,rating,rating_count)';
 
 /**
@@ -69,12 +69,85 @@ export async function fetchSeller(
   return { seller: profiles[0], listings: Array.isArray(listings) ? listings : [] };
 }
 
+export interface Zone { slug: string; name: string }
+
+/**
+ * The zone list, cached in the worker for an hour. It is read on nearly every
+ * request — to decide whether `/hounslow` is a place or a typo — and it changes
+ * about never (markety.zones is a seeded table of town centres, 0145). Without
+ * the cache, every 404 on the site would cost a database round trip, which is
+ * exactly what a crawler would hand us.
+ */
+let zoneCache: { at: number; zones: Zone[] } | null = null;
+const ZONE_TTL_MS = 60 * 60 * 1000;
+
+export async function fetchZones(env: Env): Promise<Zone[]> {
+  if (zoneCache && Date.now() - zoneCache.at < ZONE_TTL_MS) return zoneCache.zones;
+  const rows = await rest<Zone[]>(env, 'zones?select=slug,name&order=name.asc');
+  // A failed read must not poison the cache with an empty list for an hour: on
+  // failure we keep whatever we had and retry on the next request.
+  if (!Array.isArray(rows)) return zoneCache?.zones ?? [];
+  zoneCache = { at: Date.now(), zones: rows };
+  return rows;
+}
+
+export async function fetchZone(env: Env, slug: string): Promise<Zone | null> {
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) return null;
+  return (await fetchZones(env)).find((z) => z.slug === slug) ?? null;
+}
+
+export interface CategoryCount { id: string; name: string; emoji: string | null; n: number }
+
+/**
+ * Listings in a zone, newest first, optionally narrowed to one category. The
+ * same PUBLIC_FILTERS as everywhere else, so a sold, hidden or private-circle
+ * item can never appear on an indexable page.
+ *
+ * zone_slug arrives with 0145. Until that migration is applied, PostgREST
+ * answers 400 for an unknown column, rest() turns that into null and the page
+ * renders as an empty zone rather than an error — which is the right shape for
+ * a page nobody can fill yet.
+ */
+export async function fetchZoneListings(
+  env: Env, slug: string, category?: string | null, limit = 60,
+): Promise<Listing[]> {
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) return [];
+  const cat = category && /^[a-z0-9_-]+$/.test(category)
+    ? `&category_id=eq.${category}` : '';
+  const rows = await rest<Listing[]>(
+    env,
+    `listings?zone_slug=eq.${slug}&${PUBLIC_FILTERS}${cat}` +
+    `&select=${LISTING_COLS}&order=created_at.desc&limit=${limit}`);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** Which categories actually have something in this zone, for the page's own
+ *  links. A category with nothing in it is a page Google would index as empty. */
+export async function fetchZoneCategories(
+  env: Env, slug: string,
+): Promise<CategoryCount[]> {
+  const listings = await fetchZoneListings(env, slug, null, 200);
+  const names = await rest<{ id: string; name: string; emoji: string | null }[]>(
+    env, 'categories?select=id,name,emoji') ?? [];
+  const byId = new Map(names.map((c) => [c.id, c]));
+  const counts = new Map<string, number>();
+  for (const l of listings) {
+    const id = (l as unknown as { category_id?: string }).category_id;
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([id, n]) => ({ id, name: byId.get(id)?.name ?? id, emoji: byId.get(id)?.emoji ?? null, n }))
+    .sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+}
+
 /** For the sitemap. Capped: a sitemap file may hold 50,000 URLs, and we are
  *  nowhere near that, but an unbounded select is a bad habit to deploy. */
 export async function fetchPublicListings(
   env: Env, limit = 5000,
-): Promise<{ id: string; created_at?: string | null }[]> {
-  const rows = await rest<{ id: string; created_at: string }[]>(
-    env, `listings?${PUBLIC_FILTERS}&select=id,created_at&order=created_at.desc&limit=${limit}`);
+): Promise<{ id: string; created_at?: string | null; zone_slug?: string | null; category_id?: string | null }[]> {
+  const rows = await rest<{ id: string; created_at: string; zone_slug: string | null; category_id: string | null }[]>(
+    env,
+    `listings?${PUBLIC_FILTERS}&select=id,created_at,zone_slug,category_id` +
+    `&order=created_at.desc&limit=${limit}`);
   return Array.isArray(rows) ? rows : [];
 }

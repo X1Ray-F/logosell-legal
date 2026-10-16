@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes, assertFalse } from 'jsr:@std/assert@1';
-import { listingPage, sellerPage, unavailablePage, sitemap, gbp, safeImage } from './render.ts';
+import { listingPage, sellerPage, zonePage, unavailablePage, sitemap, gbp, safeImage, zoneName } from './render.ts';
 
 const ORIGIN = 'https://logosell.app';
 const ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -112,4 +112,36 @@ Deno.test('the sitemap carries real listings, not just the legal pages', () => {
 Deno.test('a listing with no description still gets a usable og:description', () => {
   const h = listingPage({ id: ID, listing: { ...base, description: null }, origin: ORIGIN });
   assertStringIncludes(h, 'og:description" content="Logosell is a UK marketplace');
+});
+
+Deno.test('a slug reads as a place name', () => {
+  assertEquals(zoneName('hounslow'), 'Hounslow');
+  assertEquals(zoneName('waltham-forest'), 'Waltham Forest');
+  assertEquals(zoneName('barking-and-dagenham'), 'Barking and Dagenham');
+  assertEquals(zoneName('kingston-upon-thames'), 'Kingston upon Thames');
+  assertEquals(zoneName('city-of-london'), 'City of London');
+});
+
+Deno.test('a zone page carries an ItemList that parses', () => {
+  const h = zonePage({
+    zone: { slug: 'hounslow', name: 'Hounslow' },
+    listings: [base, { ...base, id: 'x2', title: 'Lamp' }],
+    categories: [{ id: 'furniture', name: 'Furniture', emoji: null, n: 2 }],
+    origin: ORIGIN,
+  });
+  const m = /<script type="application\/ld\+json">(.*?)<\/script>/s.exec(h);
+  assert(m, 'no JSON-LD on the zone page');
+  const ld = JSON.parse(m[1]);
+  assertEquals(ld['@type'], 'ItemList');
+  assertEquals(ld.numberOfItems, 2);
+  assertEquals(ld.itemListElement[0].url, `${ORIGIN}/listing/${ID}`);
+});
+
+Deno.test('a hostile zone name cannot break out of the page', () => {
+  const h = zonePage({
+    zone: { slug: 'x', name: '"><script>alert(1)</script>' },
+    listings: [], categories: [], origin: ORIGIN,
+  });
+  assertFalse(h.includes('<script>alert'));
+  assertStringIncludes(h, '&lt;script&gt;');
 });

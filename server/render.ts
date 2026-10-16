@@ -32,6 +32,9 @@ export interface Seller {
   rating_count?: number | null;
 }
 
+export interface Zone { slug: string; name: string }
+export interface CategoryCount { id: string; name: string; emoji: string | null; n: number }
+
 export interface Listing {
   id: string;
   title: string;
@@ -41,6 +44,8 @@ export interface Listing {
   city?: string | null;
   condition?: string | null;
   created_at?: string | null;
+  category_id?: string | null;
+  zone_slug?: string | null;
   seller?: Seller | null;
 }
 
@@ -61,6 +66,14 @@ export function gbp(n: unknown): string {
 export function safeImage(images?: string[] | null): string {
   const first = (images && images[0]) || '';
   return /^https:\/\/[^\s"'<>]+$/.test(first) ? first : '';
+}
+
+/** Turn a slug back into something printable, for the one place a listing page
+ *  has the slug but not the zone row. "waltham-forest" -> "Waltham Forest". */
+export function zoneName(slug: string): string {
+  return slug.split('-')
+    .map((w) => (w === 'and' || w === 'upon' || w === 'of' ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
 }
 
 const CONDITION_LABEL: Record<string, string> = {
@@ -186,7 +199,9 @@ ${head(`${title} — ${price} on Logosell`, og)}
     <div class="body">
       <h1>${title}</h1>
       <div class="price">${price}</div>
-      <div>${cond ? `<span class="badge">${cond}</span>` : ''}${city ? `<span class="badge">📍 ${city}</span>` : ''}</div>
+      <div>${cond ? `<span class="badge">${cond}</span>` : ''}${
+        l.zone_slug ? `<a class="badge" style="text-decoration:none" href="${origin}/${esc(l.zone_slug)}">📍 ${esc(zoneName(l.zone_slug))}</a>`
+                    : city ? `<span class="badge">📍 ${city}</span>` : ''}</div>
       ${desc ? `<p class="muted" style="margin-top:12px">${desc}</p>` : ''}
       <p class="muted">Listed by ${seller}${l.seller?.verified ? ' · ✓ verified' : ''}</p>
       <a class="cta" href="${origin}/">See Logosell</a>
@@ -195,6 +210,16 @@ ${head(`${title} — ${price} on Logosell`, og)}
   </div>
   <p class="note muted">${LAUNCH_NOTE}</p>
 </div></body></html>`;
+}
+
+/** One line of a list of listings. Shared by the seller page and the zone
+ *  pages so a card cannot drift between them. */
+function listingRow(l: Listing, origin: string): string {
+  const img = safeImage(l.images);
+  return `<a class="row" href="${origin}/listing/${esc(l.id)}">
+      ${img ? `<img class="thumb" src="${esc(img)}" alt="${esc(l.title)}">` : '<div class="thumb"></div>'}
+      <div class="grow"><div class="ttl">${esc(l.title)}</div>
+      <div class="muted">${gbp(l.price_gbp)}${l.city ? ' · ' + esc(l.city) : ''}</div></div></a>`;
 }
 
 export function sellerPage(opts: {
@@ -217,13 +242,7 @@ export function sellerPage(opts: {
 <meta property="og:image" content="${origin}/og-image.png">
 <meta name="twitter:card" content="summary">`;
 
-  const rows = listings.map((l) => {
-    const img = safeImage(l.images);
-    return `<a class="row" href="${origin}/listing/${esc(l.id)}">
-      ${img ? `<img class="thumb" src="${esc(img)}" alt="${esc(l.title)}">` : '<div class="thumb"></div>'}
-      <div class="grow"><div class="ttl">${esc(l.title)}</div>
-      <div class="muted">${gbp(l.price_gbp)}${l.city ? ' · ' + esc(l.city) : ''}</div></div></a>`;
-  }).join('\n');
+  const rows = listings.map((l) => listingRow(l, origin)).join('\n');
 
   return `<!doctype html>
 <html lang="en"><head>
@@ -235,6 +254,83 @@ ${head(`${name} on Logosell`, og)}
     <p class="muted">${s.verified ? '✓ Verified member' : 'Member'}${s.city ? ' · ' + esc(s.city) : ''}${
       s.rating_count ? ` · ${esc(s.rating)}★ (${esc(s.rating_count)})` : ''}</p>
     ${rows || '<p class="muted">Nothing listed right now.</p>'}
+    <a class="cta" href="${origin}/">See Logosell</a>
+  </div></div>
+  <p class="note muted">${LAUNCH_NOTE}</p>
+</div></body></html>`;
+}
+
+/**
+ * A zone page, and a zone+category page. THIS is the thing a person actually
+ * searches for — "second hand sofa Hounslow", not "Logosell" — and until now
+ * there was nothing for Google to index: the sitemap held three URLs, all legal
+ * pages. One page per place, and one per place and category, built from real
+ * inventory.
+ *
+ * An empty zone is deliberately `noindex`: a page that says "nothing here" is
+ * worse than no page, because Google remembers it. It still renders for a human
+ * who followed a link.
+ */
+export function zonePage(opts: {
+  zone: Zone; listings: Listing[]; categories: CategoryCount[];
+  activeCategory?: CategoryCount | null; origin: string;
+}): string {
+  const { zone, listings, categories, activeCategory: cat, origin } = opts;
+  const path = cat ? `/${esc(zone.slug)}/${esc(cat.id)}` : `/${esc(zone.slug)}`;
+  const canonical = `${origin}${path}`;
+  const what = cat ? `${cat.name}` : 'Second-hand things';
+  const title = cat
+    ? `${cat.name} for sale in ${esc(zone.name)}`
+    : `Buy and sell in ${esc(zone.name)}`;
+  const n = listings.length;
+  const desc = esc(n
+    ? `${n} ${n === 1 ? 'item' : 'items'} for sale in ${zone.name}` +
+      `${cat ? ', ' + cat.name.toLowerCase() : ''}. Collected in person, nearby.`
+    : `${LAUNCH_NOTE}`);
+
+  // An ItemList of the first few, so a result can show more than a blue link.
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: title,
+    numberOfItems: n,
+    itemListElement: listings.slice(0, 20).map((l, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      url: `${origin}/listing/${l.id}`,
+      name: l.title,
+    })),
+  }).replace(/</g, '\\u003c');
+
+  const og = `<meta name="description" content="${desc}">
+<link rel="canonical" href="${canonical}">
+${n === 0 ? '<meta name="robots" content="noindex">' : ''}
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<meta property="og:title" content="${esc(title)} — Logosell">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${origin}/og-image.png">
+<meta name="twitter:card" content="summary">
+${n ? `<script type="application/ld+json">${jsonLd}</script>` : ''}`;
+
+  const chips = categories.map((c) =>
+    c.id === cat?.id
+      ? `<span class="badge">${esc(c.emoji ?? '')} ${esc(c.name)} · ${c.n}</span>`
+      : `<a class="badge" style="text-decoration:none" href="${origin}/${esc(zone.slug)}/${esc(c.id)}">${
+          esc(c.emoji ?? '')} ${esc(c.name)} · ${c.n}</a>`).join('');
+
+  return `<!doctype html>
+<html lang="en"><head>
+${head(`${esc(title)} — Logosell`, og)}
+</head><body><div class="wrap">
+  <a class="brand" href="${origin}/">◆ Logosell</a>
+  <div class="card"><div class="body">
+    <h1>${esc(title)}</h1>
+    <p class="muted">${what} in ${esc(zone.name)}, collected in person.${
+      cat ? ` <a href="${origin}/${esc(zone.slug)}">All categories</a>` : ''}</p>
+    ${chips ? `<div style="margin:12px 0">${chips}</div>` : ''}
+    ${n ? listings.map((l) => listingRow(l, origin)).join('\n')
+        : '<p class="muted">Nothing listed here yet.</p>'}
     <a class="cta" href="${origin}/">See Logosell</a>
   </div></div>
   <p class="note muted">${LAUNCH_NOTE}</p>
@@ -266,9 +362,15 @@ ${head('Logosell', `<meta name="robots" content="noindex">
 /** The sitemap GitHub Pages served had three URLs, all legal pages. Google had
  *  no listing to index because no listing had a page. */
 export function sitemap(opts: {
-  origin: string; listings: { id: string; created_at?: string | null }[]; sellerIds?: string[];
+  origin: string;
+  listings: { id: string; created_at?: string | null }[];
+  sellerIds?: string[];
+  /** Only zones that actually hold something: an empty zone page is noindex, so
+   *  listing it in the sitemap would be asking Google to fetch a page we then
+   *  tell it to forget. */
+  zonePaths?: string[];
 }): string {
-  const { origin, listings, sellerIds = [] } = opts;
+  const { origin, listings, sellerIds = [], zonePaths = [] } = opts;
   const statics = ['/', '/privacy.html', '/terms.html', '/delete-account.html'];
   const url = (loc: string, lastmod?: string | null) =>
     `  <url><loc>${esc(origin + loc)}</loc>${
@@ -276,6 +378,7 @@ export function sitemap(opts: {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${statics.map((s) => url(s)).join('\n')}
+${zonePaths.map((z) => url(z)).join('\n')}
 ${listings.map((l) => url(`/listing/${l.id}`, l.created_at)).join('\n')}
 ${sellerIds.map((s) => url(`/seller/${s}`)).join('\n')}
 </urlset>`;

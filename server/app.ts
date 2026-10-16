@@ -11,9 +11,13 @@
  * client-side routing for the safety and Founder Card links.
  */
 import {
-  listingPage, sellerPage, unavailablePage, sitemap, STYLE_SHA256,
+  listingPage, sellerPage, zonePage, unavailablePage, sitemap, STYLE_SHA256,
 } from './render.ts';
-import { fetchListing, fetchSeller, fetchPublicListings, UUID_RE, type Env } from './data.ts';
+import {
+  fetchListing, fetchSeller, fetchPublicListings,
+  fetchZone, fetchZoneListings, fetchZoneCategories,
+  UUID_RE, type Env,
+} from './data.ts';
 
 export interface Deps {
   env: Env;
@@ -23,6 +27,9 @@ export interface Deps {
   fetchListing?: typeof fetchListing;
   fetchSeller?: typeof fetchSeller;
   fetchPublicListings?: typeof fetchPublicListings;
+  fetchZone?: typeof fetchZone;
+  fetchZoneListings?: typeof fetchZoneListings;
+  fetchZoneCategories?: typeof fetchZoneCategories;
 }
 
 function csp(env: Env): string {
@@ -74,6 +81,9 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   const getListing = deps.fetchListing ?? fetchListing;
   const getSeller = deps.fetchSeller ?? fetchSeller;
   const getPublic = deps.fetchPublicListings ?? fetchPublicListings;
+  const getZone = deps.fetchZone ?? fetchZone;
+  const getZoneListings = deps.fetchZoneListings ?? fetchZoneListings;
+  const getZoneCategories = deps.fetchZoneCategories ?? fetchZoneCategories;
 
   const url = new URL(req.url);
   const path = decodeURIComponent(url.pathname);
@@ -101,9 +111,50 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     return html(sellerPage({ id, seller: found.seller, listings: found.listings, origin }), env);
   }
 
+  /*
+    /<zone> and /<zone>/<category>. Checked against the zone list rather than
+    claimed by the pattern, so a request for /join or /anything falls through to
+    the static site exactly as it did before — this route only answers for a
+    place that really exists. The zone list is cached for an hour in data.ts, so
+    a crawler walking 404s does not become a database round trip each time.
+
+    A path with a dot cannot reach here (privacy.html and friends are matched by
+    their own names below), and /listing, /seller and /sitemap.xml are handled
+    above, so there is nothing for this to shadow.
+  */
+  const zoneMatch = /^\/([a-z0-9][a-z0-9-]{1,48})(?:\/([a-z0-9][a-z0-9_-]{0,48}))?\/?$/.exec(path);
+  if (zoneMatch && (req.method === 'GET' || req.method === 'HEAD')) {
+    const [, slug, category] = zoneMatch;
+    const zone = await getZone(env, slug);
+    if (zone) {
+      const [listings, categories] = await Promise.all([
+        getZoneListings(env, slug, category ?? null),
+        getZoneCategories(env, slug),
+      ]);
+      const active = category ? categories.find((c) => c.id === category) ?? null : null;
+      // A category named in the URL that holds nothing in this zone is not a
+      // page: it is a guess by a crawler, and it must not become an indexable
+      // empty page with a plausible title.
+      if (category && !active) return html(unavailablePage(origin), env, 404);
+      return html(
+        zonePage({ zone, listings, categories, activeCategory: active, origin }), env);
+    }
+  }
+
   if (path === '/sitemap.xml') {
     const listings = await getPublic(env);
-    return new Response(sitemap({ origin, listings }), {
+    // Only zones and zone+category pairs that actually hold something. Derived
+    // from the listings we just read, so it costs no extra query.
+    const zoneSet = new Set<string>();
+    for (const l of listings) {
+      const z = (l as { zone_slug?: string | null }).zone_slug;
+      const c = (l as { category_id?: string | null }).category_id;
+      if (!z) continue;
+      zoneSet.add(`/${z}`);
+      if (c) zoneSet.add(`/${z}/${c}`);
+    }
+    const zonePaths = [...zoneSet].sort();
+    return new Response(sitemap({ origin, listings, zonePaths }), {
       status: 200,
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',

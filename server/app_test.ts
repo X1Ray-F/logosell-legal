@@ -7,8 +7,11 @@ const env = { url: 'https://db.example.co', anon: 'anon-key' };
 const listing = {
   id: ID, title: 'Oak dining table', price_gbp: 120, city: 'Hounslow', condition: 'good',
   images: ['https://db.example.co/l/1.jpg'], description: 'Seats six.',
+  category_id: 'furniture', zone_slug: 'hounslow',
   seller: { display_name: 'Priya', verified: true },
 };
+const ZONE = { slug: 'hounslow', name: 'Hounslow' };
+const CATS = [{ id: 'furniture', name: 'Furniture', emoji: '🪑', n: 1 }];
 
 function deps(over: Partial<Deps> = {}): Deps & { staticHits: string[] } {
   const staticHits: string[] = [];
@@ -21,7 +24,12 @@ function deps(over: Partial<Deps> = {}): Deps & { staticHits: string[] } {
     },
     fetchListing: () => Promise.resolve(listing),
     fetchSeller: () => Promise.resolve({ seller: listing.seller, listings: [listing] }),
-    fetchPublicListings: () => Promise.resolve([{ id: ID, created_at: '2026-10-14T00:00:00Z' }]),
+    fetchPublicListings: () => Promise.resolve(
+      [{ id: ID, created_at: '2026-10-14T00:00:00Z', zone_slug: 'hounslow', category_id: 'furniture' }]),
+    fetchZone: (_e: unknown, slug: string) =>
+      Promise.resolve(slug === 'hounslow' ? ZONE : null),
+    fetchZoneListings: () => Promise.resolve([listing]),
+    fetchZoneCategories: () => Promise.resolve(CATS),
     ...over,
   } as Deps & { staticHits: string[] };
 }
@@ -125,4 +133,66 @@ Deno.test('a preview deployment links to itself', () => {
   assertEquals(
     originOf(new Request('https://logosell.app.evil.com/listing/a'), ALLOWED_HOSTS),
     'https://logosell.app');
+});
+
+Deno.test('a zone has a page a person could have searched for', async () => {
+  const res = await handle(get('/hounslow'), deps());
+  assertEquals(res.status, 200);
+  const body = await res.text();
+  assertStringIncludes(body, '<title>Buy and sell in Hounslow — Logosell</title>');
+  assertStringIncludes(body, `href="https://logosell.app/listing/${ID}"`);
+  assertStringIncludes(body, '<link rel="canonical" href="https://logosell.app/hounslow">');
+  // A zone with something in it must be indexable.
+  assert(!body.includes('name="robots" content="noindex"'));
+});
+
+Deno.test('a zone and a category together is its own page', async () => {
+  const res = await handle(get('/hounslow/furniture'), deps());
+  assertEquals(res.status, 200);
+  const body = await res.text();
+  assertStringIncludes(body, '<title>Furniture for sale in Hounslow — Logosell</title>');
+  assertStringIncludes(body, 'canonical" href="https://logosell.app/hounslow/furniture"');
+  assertStringIncludes(body, 'ItemList');
+});
+
+Deno.test('a category a crawler guessed at is a 404, not an empty page', async () => {
+  const res = await handle(get('/hounslow/aeroplanes'), deps());
+  assertEquals(res.status, 404);
+  await res.body?.cancel();
+});
+
+Deno.test('an empty zone renders but is never indexed', async () => {
+  const d = deps({
+    fetchZoneListings: () => Promise.resolve([]),
+    fetchZoneCategories: () => Promise.resolve([]),
+  });
+  const res = await handle(get('/hounslow'), d);
+  assertEquals(res.status, 200);
+  const body = await res.text();
+  assertStringIncludes(body, '<meta name="robots" content="noindex">');
+  assertStringIncludes(body, 'Nothing listed here yet');
+});
+
+Deno.test('the zone route does not swallow the static site', async () => {
+  const d = deps();
+  // /join is a real static page; 'join' is not a zone, so it must fall through
+  // exactly as it did before this route existed.
+  for (const p of ['/join', '/not-a-zone', '/privacy.html', '/robots.txt']) {
+    const res = await handle(get(p), d);
+    assertEquals(await res.text(), 'static', p);
+  }
+  assertEquals(d.staticHits.length, 4);
+});
+
+Deno.test('the sitemap lists the zone pages that actually hold something', async () => {
+  const res = await handle(get('/sitemap.xml'), deps());
+  const xml = await res.text();
+  assertStringIncludes(xml, '<loc>https://logosell.app/hounslow</loc>');
+  assertStringIncludes(xml, '<loc>https://logosell.app/hounslow/furniture</loc>');
+});
+
+Deno.test('a listing page links back to its zone', async () => {
+  const res = await handle(get(`/listing/${ID}`), deps());
+  const body = await res.text();
+  assertStringIncludes(body, 'href="https://logosell.app/hounslow">📍 Hounslow');
 });
