@@ -108,3 +108,13 @@ deno task dev     # necesită SUPABASE_URL și SUPABASE_ANON_KEY în mediu
 - `supabase/functions/listing-page` rămâne desfășurată și neatinsă. După tăierea
   DNS nu mai e folosită de nimeni; dacă o ștergi, șterge și redirectarea către
   `/s.html` din `404.html`.
+
+  **Și scoate-o din `PUBLIC_PAGES`** în `scripts/verify-edge-auth.py:79` (repo-ul
+  aplicației), unde stă alături de `passport-page`. Verificatorul cere ca funcția
+  să răspundă unui străin fără credențiale; dacă funcția nu mai există, pasul
+  `! listing-page: reachable` devine **roșu permanent** în jobul `live backend`,
+  iar cine îl vede o va citi, pe bună dreptate, ca intermitența cunoscută a
+  aceluiași pas (două rulări concurente care sondează funcții care pornesc la
+  rece — dovedit pe `59c14e1`: push verde, pull_request roșu, la trei secunde
+  distanță, același commit). Scoaterea din `PUBLIC_PAGES` trebuie să fie în
+  aceeași schimbare care retrage funcția, nu după.
