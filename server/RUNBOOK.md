@@ -57,7 +57,9 @@ deschide linkurile partajate în aplicație pe Android.
 
 ## Desfășurare
 
-Nimic din ce urmează nu l-am rulat eu.
+Pasul 1 e **făcut** (16 oct, de mine, cu tokenul pus de proprietar într-o
+fereastră). Pasul cu DNS-ul rămâne al lui. Textul de mai jos e ce a funcționat,
+nu ce ar trebui să funcționeze.
 
 1. **Deno Deploy — FĂCUT pe 2026-10-16.**
 
