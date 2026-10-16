@@ -59,8 +59,25 @@ deschide linkurile partajate în aplicație pe Android.
 
 Nimic din ce urmează nu l-am rulat eu.
 
-1. **Deno Deploy** — cont, apoi un proiect legat de repo-ul `X1Ray-F/logosell-legal`,
-   ramura pe care o alegi, entry point `server/main.ts`.
+1. **Deno Deploy** — cont pe `deno.com/deploy` (login cu GitHub merge), apoi un
+   token din Account Settings → Access Tokens.
+
+   `deployctl` e instalat (1.13.1, `~/.local/bin/deployctl`). Desfășurarea e o
+   comandă, iar scriptul pregătit ia cheile din `.env`-ul de build fără să le
+   tipărească:
+
+   ```bash
+   export DENO_DEPLOY_TOKEN=<token>
+   bash /tmp/claude-1000/-home-xrayf/4fc30862-ee9e-42e5-8372-3648076fc6ba/scratchpad/deno-deploy.sh
+   ```
+
+   Sau direct, din `~/logosell/logosell-legal`:
+
+   ```bash
+   deployctl deploy --project=logosell-web --entrypoint=server/main.ts \
+     --env="SUPABASE_URL=…" --env="SUPABASE_ANON_KEY=…" \
+     --exclude=.git,server/*_test.ts --prod
+   ```
 2. **Variabile de mediu** în proiect: `SUPABASE_URL` și `SUPABASE_ANON_KEY` —
    aceleași valori `EXPO_PUBLIC_*` din `marketplace.env` din seif. Cheia anon e
    publică prin natura ei (o conține și APK-ul), deci nu adaugă nicio expunere.
