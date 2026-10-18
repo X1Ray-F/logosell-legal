@@ -37,6 +37,9 @@ export interface CategoryCount { id: string; name: string; emoji: string | null;
 
 export interface Listing {
   id: string;
+  /** Whose listing it is. Shop mode is decided from this, so data.ts selects it
+   *  on every read; optional only because older fixtures never carried it. */
+  seller_id?: string | null;
   title: string;
   description?: string | null;
   price_gbp: number;
@@ -47,6 +50,24 @@ export interface Listing {
   category_id?: string | null;
   zone_slug?: string | null;
   seller?: Seller | null;
+}
+
+/**
+ * What a shop page may know about a shop. A whitelist, narrower than the
+ * markety.shop_front row on purpose: the address, the coordinates, the rating
+ * and review count, the company number and the collection note are not in this
+ * type, so a renderer written against it cannot print them by accident, and
+ * data.ts copies only these fields out of the RPC row.
+ */
+export interface ShopFront {
+  business_name?: string | null;
+  display_name?: string | null;
+  city?: string | null;
+  /** null or absent = the shop never set hours; [] = closed all day today;
+   *  otherwise [["09:00","17:30"], ...]. Treated as untrusted input. */
+  hours_today?: unknown;
+  open_now?: boolean | null;
+  listings_live?: number | null;
 }
 
 export function esc(s: unknown): string {
@@ -140,6 +161,122 @@ ${extra}
 const LAUNCH_NOTE =
   'Logosell is a UK marketplace built around meeting safely, in person. Starting in Hounslow.';
 
+/*
+  ── Shop mode: the helpers ──────────────────────────────────────────────────
+
+  A verified trader's pages show NO price anywhere: not in the title, h1,
+  og:title, product:price:* or structured data, and not in a list row. Instead
+  the page says "Ask in store". The reasoning is the owner's: a page without a
+  price is probably not an "invitation to purchase" (DMCC Act 2024 s.230(10),
+  CMA207 4.11), whereas the same page with one probably is. That makes the
+  absence of a price a legal obligation, which is why shop_test.ts scans every
+  shop page for it. Which sellers are traders is decided in app.ts; everything
+  here only renders what it is told.
+*/
+
+export const SHOP_NOTE = 'Sold in store only. Logosell does not take payment.';
+const ASK_IN_STORE = 'Ask in store';
+const ITEM_FALLBACK = 'Item in store';
+
+/** Whose listing this is, lower-cased so it can be looked up in a set of ids. */
+export function sellerIdOf(l: Listing): string | null {
+  const id = l.seller_id ?? l.seller?.id ?? null;
+  return typeof id === 'string' && id ? id.toLowerCase() : null;
+}
+
+/** Nothing, or only the invisible characters a person could slip between a currency
+ *  sign and its digits to dodge a plain match. */
+const GAP = String.raw`[\s\u200b-\u200d\u2060\ufeff]*`;
+/** 4871, 4,871, 4871.50, and 4 871 (groups of three after a space). */
+const AMOUNT = String.raw`\d[\d,]*(?:\.\d+)?(?:[^\S\r\n]\d{3}(?!\d))*`;
+const UNIT = String.raw`(?:gbp|eur|usd|pounds?|quid|euros?|dollars?|bucks)`;
+const CODE = String.raw`(?:gbp|eur|usd)`;
+/** &pound; &euro; &#163; &#xA3; and the other currency entities, written out in full,
+ *  and once or twice escaped again (&amp;pound;) as a layer that escapes twice leaves them. */
+const ENTITY = String.raw`&(?:amp;)*(?:pound|euro|dollar|yen|cent|curren|#0*(?:163|8364|36|165|162)|#x0*(?:a3|20ac|24|a5|a2));`;
+
+/** A price as a shop might type it: £120, $20, 1,250 GBP, 15 quid, GBP 40, &pound;9. */
+const PRICE_TEXT: RegExp[] = [
+  new RegExp(String.raw`\p{Sc}${GAP}${AMOUNT}(?:\s*[km]\b)?`, 'giu'),
+  new RegExp(`${ENTITY}${GAP}${AMOUNT}`, 'giu'),
+  new RegExp(String.raw`${AMOUNT}${GAP}${UNIT}\b`, 'giu'),
+  new RegExp(String.raw`\b${CODE}${GAP}${AMOUNT}`, 'giu'),
+];
+const LOOSE_SIGN = new RegExp(`${ENTITY}|\\p{Sc}`, 'giu');
+const MAX_SHOP_TEXT = 4000;
+
+/**
+ * Best-effort removal of a typed price from text a SHOP wrote: its title, its
+ * description, its city, its trading name. The renderer controls every price IT
+ * prints, but a shop can type "£120" into a title, and a shop page that carries a
+ * price is the thing this mode exists to prevent.
+ *
+ * It is a net, not a wall. It catches a currency sign (any, not only the pound)
+ * with an amount, an amount with pounds/GBP/quid, "GBP 40", an HTML pound entity,
+ * and the fullwidth and zero-width tricks that would get past a plain match. It
+ * cannot catch "twenty pounds", an obfuscated "1 2 0", a bare "4871", or a price
+ * in a photo. Text without a price comes back unchanged, byte for byte, up to
+ * MAX_SHOP_TEXT characters: nothing a shop page prints is longer than that, and a
+ * bound is what keeps the matching fast when the text is a million digits.
+ */
+export function withoutPrices(text: unknown): string {
+  const input = String(text ?? '').slice(0, MAX_SHOP_TEXT);
+  // Matched on the NFKC form, so a fullwidth "￡１２０" is seen for what it is. The input
+  // is only replaced by that form when a price was found in it.
+  const folded = input.normalize('NFKC');
+  let out = folded;
+  for (const re of PRICE_TEXT) out = out.replace(re, '');
+  out = out.replace(LOOSE_SIGN, '');
+  if (out === folded) return input;
+  return out
+    .replace(/\(\s*\)|\[\s*\]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/^[\s\-–—:,;|/]+|[\s\-–—:,;|/]+$/g, '')
+    .trim();
+}
+
+const HHMM = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * One line about today's opening, from shop_front's hours_today and open_now.
+ * hours_today is a public database column, so it is treated as untrusted: every
+ * range must be the exact "HH:MM" shape the database itself enforces
+ * (valid_opening_hours, migration 0147) or the whole line is dropped.
+ *
+ *   hours never set      -> null            (say nothing. open_now is false for a
+ *                                            shop that simply has not filled its
+ *                                            hours in, and "Closed now" would be
+ *                                            a claim we cannot back)
+ *   closed all day       -> "Closed today"
+ *   ranges, open         -> "Open now · Today 09:00–17:30"
+ *   ranges, not open     -> "Closed now · Today 09:00–12:00, 13:00–17:30"
+ *   ranges, open_now unknown -> "Today 09:00–17:30"
+ *   anything malformed   -> null
+ */
+export function shopHours(shop: ShopFront | null | undefined): string | null {
+  const raw = shop?.hours_today;
+  if (!Array.isArray(raw)) return null;
+  if (raw.length === 0) return 'Closed today';
+  const ranges = raw.filter((r) =>
+    Array.isArray(r) && r.length === 2 && HHMM.test(String(r[0])) && HHMM.test(String(r[1])));
+  if (ranges.length !== raw.length) return null;
+  const today = `Today ${ranges.map((r) => `${r[0]}–${r[1]}`).join(', ')}`;
+  if (typeof shop?.open_now !== 'boolean') return today;
+  return `${shop.open_now ? 'Open now' : 'Closed now'} · ${today}`;
+}
+
+/** The name a shop trades under: its business name, then its profile name, then
+ *  whatever the caller has. Run through withoutPrices like every other string
+ *  the shop typed, so "no pound sign anywhere on a shop page" has no exception. */
+function shopName(shop: ShopFront | null | undefined, fallback?: string | null): string {
+  for (const candidate of [shop?.business_name, shop?.display_name, fallback]) {
+    const name = withoutPrices(candidate).trim();
+    if (name) return name;
+  }
+  return 'A local shop';
+}
+
 export function listingPage(opts: {
   id: string; listing: Listing; origin: string;
 }): string {
@@ -213,9 +350,19 @@ ${head(`${title} — ${price} on Logosell`, og)}
 }
 
 /** One line of a list of listings. Shared by the seller page and the zone
- *  pages so a card cannot drift between them. */
-function listingRow(l: Listing, origin: string): string {
+ *  pages so a card cannot drift between them. With `asShop` the line carries no
+ *  price, only "Ask in store"; without it the markup is exactly what it was
+ *  before shop mode existed (golden_test.ts holds it to that). */
+function listingRow(l: Listing, origin: string, asShop = false): string {
   const img = safeImage(l.images);
+  if (asShop) {
+    const title = esc(withoutPrices(l.title) || ITEM_FALLBACK);
+    const city = withoutPrices(l.city);
+    return `<a class="row" href="${origin}/listing/${esc(l.id)}">
+      ${img ? `<img class="thumb" src="${esc(img)}" alt="${title}">` : '<div class="thumb"></div>'}
+      <div class="grow"><div class="ttl">${title}</div>
+      <div class="muted">${ASK_IN_STORE}${city ? ' · ' + esc(city) : ''}</div></div></a>`;
+  }
   return `<a class="row" href="${origin}/listing/${esc(l.id)}">
       ${img ? `<img class="thumb" src="${esc(img)}" alt="${esc(l.title)}">` : '<div class="thumb"></div>'}
       <div class="grow"><div class="ttl">${esc(l.title)}</div>
@@ -274,8 +421,18 @@ ${head(`${name} on Logosell`, og)}
 export function zonePage(opts: {
   zone: Zone; listings: Listing[]; categories: CategoryCount[];
   activeCategory?: CategoryCount | null; origin: string;
+  /** Ids (lower-case) of the verified traders. Given, a listing from one of them
+   *  is shown without a price, and so is one whose seller cannot be identified:
+   *  an unknown seller is treated as a shop, never as a person. Left out, every
+   *  row is person-to-person, exactly as before shop mode. */
+  traders?: ReadonlySet<string>;
 }): string {
-  const { zone, listings, categories, activeCategory: cat, origin } = opts;
+  const { zone, listings, categories, activeCategory: cat, origin, traders } = opts;
+  const asShop = (l: Listing): boolean => {
+    if (!traders) return false;
+    const seller = sellerIdOf(l);
+    return seller === null || traders.has(seller);
+  };
   const path = cat ? `/${esc(zone.slug)}/${esc(cat.id)}` : `/${esc(zone.slug)}`;
   const canonical = `${origin}${path}`;
   const what = cat ? `${cat.name}` : 'Second-hand things';
@@ -298,7 +455,7 @@ export function zonePage(opts: {
       '@type': 'ListItem',
       position: i + 1,
       url: `${origin}/listing/${l.id}`,
-      name: l.title,
+      name: asShop(l) ? withoutPrices(l.title) || ITEM_FALLBACK : l.title,
     })),
   }).replace(/</g, '\\u003c');
 
@@ -329,7 +486,7 @@ ${head(`${esc(title)} — Logosell`, og)}
     <p class="muted">${what} in ${esc(zone.name)}, collected in person.${
       cat ? ` <a href="${origin}/${esc(zone.slug)}">All categories</a>` : ''}</p>
     ${chips ? `<div style="margin:12px 0">${chips}</div>` : ''}
-    ${n ? listings.map((l) => listingRow(l, origin)).join('\n')
+    ${n ? listings.map((l) => listingRow(l, origin, asShop(l))).join('\n')
         : '<p class="muted">Nothing listed here yet.</p>'}
     <a class="cta" href="${origin}/">See Logosell</a>
   </div></div>
@@ -382,4 +539,129 @@ ${zonePaths.map((z) => url(z)).join('\n')}
 ${listings.map((l) => url(`/listing/${l.id}`, l.created_at)).join('\n')}
 ${sellerIds.map((s) => url(`/seller/${s}`)).join('\n')}
 </urlset>`;
+}
+
+/*
+  ── Shop mode: the pages ────────────────────────────────────────────────────
+
+  What these two have in common, and what the tests hold them to:
+
+    - No price, in any form. Not in <title>, <h1>, og:title, product:price:*,
+      a list row, or structured data. There is no JSON-LD at all: a Product
+      without an Offer earns nothing in search, and one with an Offer is the
+      thing this mode exists to prevent.
+    - No address, no rating, no "N sold". The shop's address is hidden from
+      logged-out callers by the database (migration 0149), and ratings and sales
+      counts are person-to-person trust signals this mode does not use.
+    - Every string a shop typed goes through withoutPrices first.
+    - No inline style="…". The CSP pins the one <style> block by hash, so a new
+      look has to come from a class that already exists in CSS.
+*/
+
+/**
+ * A listing page for a verified trader's stock: the item, the shop that has it,
+ * today's opening hours when the shop gave them, and where to go. `shop` is
+ * optional because the hours come from a second read that can fail; the page is
+ * still correct without them, only shorter.
+ */
+export function shopListingPage(opts: {
+  id: string; listing: Listing; origin: string; shop?: ShopFront | null;
+}): string {
+  const { id, listing: l, origin, shop } = opts;
+  const title = esc(withoutPrices(l.title) || ITEM_FALLBACK);
+  const img = safeImage(l.images);
+  const desc = esc(withoutPrices(l.description).replace(/\s+/g, ' ').trim().slice(0, 200));
+  const blurb = desc || esc(`${ASK_IN_STORE}. ${SHOP_NOTE}`);
+  const name = esc(shopName(shop, l.seller?.display_name));
+  const cond = esc(CONDITION_LABEL[String(l.condition)] ?? '');
+  const city = esc(withoutPrices(l.city));
+  const canonical = `${origin}/listing/${esc(id)}`;
+  const sellerId = sellerIdOf(l);
+  const hours = shopHours(shop);
+
+  const og = `<meta name="description" content="${blurb}">
+<link rel="canonical" href="${canonical}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<meta property="og:title" content="${title} — ${name}">
+<meta property="og:description" content="${blurb}">
+${img ? `<meta property="og:image" content="${esc(img)}">
+<meta property="og:image:alt" content="${title}">` : `<meta property="og:image" content="${origin}/og-image.png">`}
+<meta name="twitter:card" content="summary_large_image">`;
+
+  return `<!doctype html>
+<html lang="en"><head>
+${head(`${title} — ${name} on Logosell`, og)}
+</head><body><div class="wrap">
+  <a class="brand" href="${origin}/">◆ Logosell</a>
+  <div class="card">
+    ${img ? `<img class="img" src="${esc(img)}" alt="${title}">` : ''}
+    <div class="body">
+      <h1>${title}</h1>
+      <div><span class="badge">${ASK_IN_STORE}</span>${cond ? `<span class="badge">${cond}</span>` : ''}${
+        l.zone_slug ? `<a class="badge" href="${origin}/${esc(l.zone_slug)}">📍 ${esc(zoneName(l.zone_slug))}</a>`
+                    : city ? `<span class="badge">📍 ${city}</span>` : ''}</div>
+      ${desc ? `<p class="muted">${desc}</p>` : ''}
+      <p class="muted">Sold by ${name}${hours ? ` · ${esc(hours)}` : ''}</p>
+      <p class="muted">${SHOP_NOTE}</p>
+      ${sellerId ? `<a class="cta" href="${origin}/seller/${esc(sellerId)}">See the shop</a>`
+                 : `<a class="cta" href="${origin}/">See Logosell</a>`}
+      <a class="cta2" href="logosell://listing/${esc(id)}">Already a member? Open in the app</a>
+    </div>
+  </div>
+  <p class="note muted">${LAUNCH_NOTE}</p>
+</div></body></html>`;
+}
+
+/**
+ * A verified trader's shop page: name, whether it is open and today's hours (when
+ * the shop set them), how many pieces it has, and the in-store-only line, then
+ * the stock as price-free rows. `listings` is what the database returned for the
+ * seller (at most 40); the count shown is the larger of that and the shop's own
+ * live count, so a shop with more than 40 pieces is not reported as having 40.
+ */
+export function shopSellerPage(opts: {
+  id: string; seller: Seller; listings: Listing[]; origin: string; shop?: ShopFront | null;
+}): string {
+  const { id, seller: s, listings, origin, shop } = opts;
+  const name = esc(shopName(shop, s.display_name));
+  const canonical = `${origin}/seller/${esc(id)}`;
+  const cityText = withoutPrices(shop?.city ?? s.city);
+  const city = esc(cityText);
+  const hours = shopHours(shop);
+  const live = typeof shop?.listings_live === 'number' && Number.isFinite(shop.listings_live) &&
+    shop.listings_live > 0 ? Math.floor(shop.listings_live) : 0;
+  const total = Math.max(listings.length, live);
+  const pieces = total
+    ? `${total} piece${total === 1 ? '' : 's'} in store`
+    : 'Nothing in store right now';
+  const desc = esc(`${pieces}${total && cityText ? ' in ' + cityText : ''}. ${SHOP_NOTE}`);
+
+  const og = `<meta name="description" content="${desc}">
+<link rel="canonical" href="${canonical}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<meta property="og:title" content="${name} on Logosell">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${origin}/og-image.png">
+<meta name="twitter:card" content="summary">`;
+
+  const rows = listings.map((l) => listingRow(l, origin, true)).join('\n');
+
+  return `<!doctype html>
+<html lang="en"><head>
+${head(`${name} on Logosell`, og)}
+</head><body><div class="wrap">
+  <a class="brand" href="${origin}/">◆ Logosell</a>
+  <div class="card"><div class="body">
+    <h1>${name}</h1>
+    <p class="muted">Shop${city ? ' · ' + city : ''}</p>
+    ${hours ? `<p class="muted">${esc(hours)}</p>` : ''}
+    <p class="muted">${pieces}</p>
+    <p class="muted">${SHOP_NOTE}</p>
+    ${rows}
+    <a class="cta" href="${origin}/">See Logosell</a>
+  </div></div>
+  <p class="note muted">${LAUNCH_NOTE}</p>
+</div></body></html>`;
 }

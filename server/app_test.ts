@@ -4,11 +4,14 @@ import { handle, originOf, ALLOWED_HOSTS, type Deps } from './app.ts';
 const ID = '550e8400-e29b-41d4-a716-446655440000';
 const env = { url: 'https://db.example.co', anon: 'anon-key' };
 
+// A private seller. seller_id is NOT NULL in the database, so every real listing has one;
+// shop mode needs it to decide whether the price may be shown (see shop_test.ts).
+const SELLER = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 const listing = {
-  id: ID, title: 'Oak dining table', price_gbp: 120, city: 'Hounslow', condition: 'good',
-  images: ['https://db.example.co/l/1.jpg'], description: 'Seats six.',
+  id: ID, seller_id: SELLER, title: 'Oak dining table', price_gbp: 120, city: 'Hounslow',
+  condition: 'good', images: ['https://db.example.co/l/1.jpg'], description: 'Seats six.',
   category_id: 'furniture', zone_slug: 'hounslow',
-  seller: { display_name: 'Priya', verified: true },
+  seller: { id: SELLER, display_name: 'Priya', verified: true },
 };
 const ZONE = { slug: 'hounslow', name: 'Hounslow' };
 const CATS = [{ id: 'furniture', name: 'Furniture', emoji: '🪑', n: 1 }];
@@ -30,6 +33,10 @@ function deps(over: Partial<Deps> = {}): Deps & { staticHits: string[] } {
       Promise.resolve(slug === 'hounslow' ? ZONE : null),
     fetchZoneListings: () => Promise.resolve([listing]),
     fetchZoneCategories: () => Promise.resolve(CATS),
+    // No network in a unit test. The default (the real reader) would answer "unknown",
+    // and unknown fails closed, so these are what make a price page possible at all.
+    fetchTraders: () => Promise.resolve(new Set<string>()),
+    fetchShop: () => Promise.resolve(null),
     ...over,
   } as Deps & { staticHits: string[] };
 }
@@ -105,15 +112,16 @@ Deno.test('the sitemap is xml and contains the live listing', async () => {
 Deno.test('every other path still goes to the static site', async () => {
   const d = deps();
   for (const p of ['/', '/privacy.html', '/terms.html', '/m/0123456789abcdef0123456789abcdef',
-                   '/p/FOUNDER-1', '/.well-known/assetlinks.json', '/robots.txt', '/s.html']) {
+                   '/p/FOUNDER-1', '/robots.txt', '/s.html']) {
     const res = await handle(get(p), d);
     assertEquals(res.status, 200, p);
     assertEquals(await res.text(), 'static');
   }
-  assertEquals(d.staticHits.length, 8);
-  // App Links depend on this file being reachable, or shared links stop
-  // opening in the app on Android.
-  assert(d.staticHits.includes('/.well-known/assetlinks.json'));
+  assertEquals(d.staticHits.length, 7);
+  // /.well-known/assetlinks.json used to be in this list and is not any more: the
+  // static handler cannot serve a dot-segment path, so the server answers it itself
+  // (see wellknown_test.ts). /s.html with no query is still the file: it is only
+  // redirected when it carries a listing or seller id to render (shop_test.ts).
 });
 
 Deno.test('a forged Host header cannot plant its domain in canonical or og:url', async () => {
@@ -195,4 +203,87 @@ Deno.test('a listing page links back to its zone', async () => {
   const res = await handle(get(`/listing/${ID}`), deps());
   const body = await res.text();
   assertStringIncludes(body, 'href="https://logosell.app/hounslow">📍 Hounslow');
+});
+
+/*
+  ── Which hosts may name themselves ─────────────────────────────────────────────────────────
+
+  Production is https://logosell-web.x1ray-f.deno.net (RUNBOOK.md). The allowlist once said
+  `deno.dev`, the old Deploy Classic domain, so on the real host every canonical, og:url and
+  sitemap entry fell back to https://logosell.app, which was still GitHub Pages and answered
+  404 for /hounslow. Nothing noticed, because every test used logosell.app or localhost.
+*/
+
+const PRODUCTION = 'https://logosell-web.x1ray-f.deno.net';
+
+/** The production URL as RUNBOOK.md writes it, so the test follows the document and not a
+ *  copy of it. If the document is reworded so this stops matching, fail loudly: a silent
+ *  pass here would bring the bug back. */
+async function productionFromRunbook(): Promise<string> {
+  const text = await Deno.readTextFile(new URL('./RUNBOOK.md', import.meta.url));
+  const m = /producție\s*:\s*(https:\/\/[^\s`]+)/u.exec(text);
+  if (!m) {
+    throw new Error('RUNBOOK.md no longer says "producție : https://…"; fix the RUNBOOK or this test');
+  }
+  return m[1].replace(/\/+$/, '');
+}
+
+Deno.test('the production host names itself, not the fallback', () => {
+  assertEquals(originOf(new Request(`${PRODUCTION}/hounslow`), ALLOWED_HOSTS), PRODUCTION);
+});
+
+Deno.test('the production host written in RUNBOOK.md is covered by ALLOWED_HOSTS', async () => {
+  const prod = await productionFromRunbook();
+  assertEquals(originOf(new Request(`${prod}/hounslow`), ALLOWED_HOSTS), prod, prod);
+});
+
+Deno.test('on the production host canonical, og:url and links stay on the production host', async () => {
+  const prod = await productionFromRunbook();
+  for (const [path, canonical] of [
+    ['/hounslow', `${prod}/hounslow`],
+    ['/hounslow/furniture', `${prod}/hounslow/furniture`],
+    [`/listing/${ID}`, `${prod}/listing/${ID}`],
+    [`/seller/${SELLER}`, `${prod}/seller/${SELLER}`],
+  ] as const) {
+    const res = await handle(new Request(`${prod}${path}`), deps());
+    assertEquals(res.status, 200, path);
+    const body = await res.text();
+    assertStringIncludes(body, `<link rel="canonical" href="${canonical}">`);
+    assertStringIncludes(body, `<meta property="og:url" content="${canonical}">`);
+    // Nothing in the page may point back at the fallback origin.
+    assert(!body.includes('https://logosell.app'), `${path} links to the fallback origin`);
+  }
+});
+
+Deno.test('on the production host the sitemap lists production URLs', async () => {
+  const prod = await productionFromRunbook();
+  const res = await handle(new Request(`${prod}/sitemap.xml`), deps());
+  const xml = await res.text();
+  assertStringIncludes(xml, `<loc>${prod}/listing/${ID}</loc>`);
+  assertStringIncludes(xml, `<loc>${prod}/hounslow</loc>`);
+  assert(!xml.includes('https://logosell.app'), 'sitemap falls back to the other origin');
+});
+
+Deno.test('a host that only looks like ours is refused', () => {
+  for (const evil of [
+    'https://logosell-web.x1ray-f.deno.net.evil.com',  // ours as a prefix
+    'https://evilx1ray-f.deno.net',                    // ours as a suffix without the dot
+    'https://x1ray-f.deno.net.evil.com',
+    'https://other-org.deno.net',                      // another Deploy tenant
+    'https://deno.net',                                // the parent domain
+    'https://logosell.app.evil.com',
+  ]) {
+    assertEquals(originOf(new Request(`${evil}/hounslow`), ALLOWED_HOSTS), 'https://logosell.app', evil);
+  }
+});
+
+Deno.test('every ALLOWED_HOSTS entry is a bare host name that the matcher can really match', () => {
+  // originOf accepts `name === entry` or `name.endsWith('.' + entry)`. An entry with a leading
+  // dot (".deno.net"), a wildcard ("*.deno.net"), a scheme or a port matches nothing and fails
+  // silently, which is exactly how a "fix" for the production host would look like it worked.
+  for (const entry of ALLOWED_HOSTS) {
+    assert(/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(entry), `"${entry}" cannot match a host name`);
+    assert(!entry.includes('..'), `"${entry}" has an empty label`);
+  }
+  assert(ALLOWED_HOSTS.includes('logosell.app'));
 });

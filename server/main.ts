@@ -6,7 +6,7 @@
  * Deploy: Deno Deploy, this repo, entry server/main.ts (see server/RUNBOOK.md)
  */
 import { serveDir } from 'jsr:@std/http@1/file-server';
-import { handle, type Deps } from './app.ts';
+import { canonicalPath, type Deps, handle, isSourcePath } from './app.ts';
 
 const env = {
   url: Deno.env.get('SUPABASE_URL') ?? '',
@@ -20,10 +20,14 @@ if (!env.url || !env.anon) {
   console.warn('SUPABASE_URL / SUPABASE_ANON_KEY not set — listing pages will not render');
 }
 
-/** The static site is this repository. `server/` is source, not content. */
+/** The static site is this repository. `server/` is source, not content.
+ *
+ *  The path is settled by canonicalPath first, because this guard used to read
+ *  the raw pathname and /server%2fapp.ts walked straight past it into the file
+ *  server, which decodes before it looks on disk (app.ts, canonicalPath). */
 const serveStatic: Deps['serveStatic'] = async (req) => {
-  const path = new URL(req.url).pathname;
-  if (path === '/server' || path.startsWith('/server/')) {
+  const path = canonicalPath(new URL(req.url).pathname);
+  if (path === null || isSourcePath(path)) {
     return notFound(req);
   }
   const res = await serveDir(req, { fsRoot: '.', quiet: true, showDirListing: false });
