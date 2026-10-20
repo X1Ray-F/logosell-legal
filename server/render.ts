@@ -285,7 +285,7 @@ export function listingPage(opts: {
   const price = gbp(l.price_gbp);
   const img = safeImage(l.images);
   const desc = esc((l.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 200));
-  const seller = esc(l.seller?.display_name || 'A verified member');
+  const seller = esc(l.seller?.display_name || 'A Logosell member');
   const cond = esc(CONDITION_LABEL[String(l.condition)] ?? '');
   const city = esc(l.city ?? '');
   const canonical = `${origin}/listing/${esc(id)}`;
@@ -340,7 +340,7 @@ ${head(`${title} — ${price} on Logosell`, og)}
         l.zone_slug ? `<a class="badge" style="text-decoration:none" href="${origin}/${esc(l.zone_slug)}">📍 ${esc(zoneName(l.zone_slug))}</a>`
                     : city ? `<span class="badge">📍 ${city}</span>` : ''}</div>
       ${desc ? `<p class="muted" style="margin-top:12px">${desc}</p>` : ''}
-      <p class="muted">Listed by ${seller}${l.seller?.verified ? ' · ✓ verified' : ''}</p>
+      <p class="muted">Listed by ${seller}</p>
       <a class="cta" href="${origin}/">See Logosell</a>
       <a class="cta2" href="logosell://listing/${esc(id)}">Already a member? Open in the app</a>
     </div>
@@ -398,7 +398,7 @@ ${head(`${name} on Logosell`, og)}
   <a class="brand" href="${origin}/">◆ Logosell</a>
   <div class="card"><div class="body">
     <h1>${name}</h1>
-    <p class="muted">${s.verified ? '✓ Verified member' : 'Member'}${s.city ? ' · ' + esc(s.city) : ''}${
+    <p class="muted">Member${s.city ? ' · ' + esc(s.city) : ''}${
       s.rating_count ? ` · ${esc(s.rating)}★ (${esc(s.rating_count)})` : ''}</p>
     ${rows || '<p class="muted">Nothing listed right now.</p>'}
     <a class="cta" href="${origin}/">See Logosell</a>

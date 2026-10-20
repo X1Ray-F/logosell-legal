@@ -106,19 +106,19 @@ a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decorat
         set('sub', gbp(d.price_gbp) + (d.city ? ' \u00B7 ' + d.city : ''));
         set('body', d.description || '');
         var who = d.seller && d.seller.display_name;
-        set('meta', who ? ('Sold by ' + who + (d.seller.verified ? ' \u00B7 verified member' : '')) : '');
+        set('meta', who ? ('Sold by ' + who) : '');
         var im = (d.images || [])[0];
         if (im) { var e = document.getElementById('img'); e.src = im; e.alt = d.title; e.hidden = false; }
       } else {
         var lvl = LEVELS[d.verification_level || 0] || LEVELS[0];
         document.title = d.display_name + ' \u2014 Logosell';
         set('t', d.display_name);
-        set('sub', lvl + (d.verified ? ' \u00B7 verified member' : ''));
+        set('sub', lvl);
         var bits = [];
-        if (d.sales_count) bits.push(d.sales_count + ' completed deal' + (d.sales_count === 1 ? '' : 's'));
+        if (d.sales_count) bits.push(d.sales_count + ' deal' + (d.sales_count === 1 ? '' : 's') + ' confirmed in the app');
         if (d.rating_count) bits.push(Number(d.rating).toFixed(1) + '\u2605 from ' + d.rating_count + ' review' + (d.rating_count === 1 ? '' : 's'));
         set('body', bits.join(' \u00B7 '));
-        set('meta', 'Trust on Logosell is earned in the open \u2014 real deals, reviews, and members confirming one another.');
+        set('meta', 'Member levels come from a confirmed email and two-step sign-in, vouches from other members, and deals confirmed in the app. They are not identity checks.');
       }
       show('item');
     })
