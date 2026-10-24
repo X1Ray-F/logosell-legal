@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-Cvl+BTdvWNn88t17W6h0Wtu8kUYcJKTXA/QmqDcIRSU='; style-src 'sha256-upwpfAji6wRya+HLpx/ylTBjd3Id595n9H1HkZgrdE0='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-mAar31jyveWV4YSpGChc2eobWT+A+OivIiuN73ug0a0='; style-src 'sha256-upwpfAji6wRya+HLpx/ylTBjd3Id595n9H1HkZgrdE0='; img-src 'self' data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
@@ -26,11 +26,25 @@
   var t = document.getElementById('t'), m = document.getElementById('m'),
       b = document.getElementById('b'), i = document.getElementById('i');
 
-  var err = p.get('error_description') || p.get('error');
-  if (err) {
+  // error_description is free text that anyone can put in a link, so it is never
+  // shown, not even as text. The error code picks one of the fixed messages
+  // below; a code we do not know gets the generic one.
+  var ERRORS = {
+    otp_expired: 'That link has expired or was already used.',
+    access_denied: 'That link is no longer valid.',
+    flow_state_expired: 'That link has expired.',
+    flow_state_not_found: 'That link is no longer valid.',
+    bad_jwt: 'That link is no longer valid.',
+    server_error: 'Something went wrong on our side.',
+    temporarily_unavailable: 'Something went wrong on our side.'
+  };
+  var code = p.get('error_code') || p.get('error');
+  if (code || p.get('error_description')) {
+    var known = typeof code === 'string' && Object.prototype.hasOwnProperty.call(ERRORS, code);
     i.textContent = '!';
     t.textContent = 'That link did not work';
-    m.textContent = err + '. Confirmation links expire — open Logosell and ask for a new one.';
+    m.textContent = (known ? ERRORS[code] : 'Something went wrong with that link.') +
+      ' Confirmation links expire — open Logosell and ask for a new one.';
     return;
   }
 

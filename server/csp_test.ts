@@ -32,3 +32,10 @@ Deno.test('every inline script and style in a static page is allowed by its CSP 
   assert(blocks > 0, 'found no inline blocks at all: the scan is broken');
   assertEquals(problems, []);
 });
+
+Deno.test('confirm.html never writes text taken from the URL into the page', async () => {
+  const html = await Deno.readTextFile('confirm.html');
+  // The old code did m.textContent = err + '…' with err read from the fragment.
+  assert(!/p\.get\('error_description'\)\s*\|\|/.test(html), 'error_description is displayed');
+  assert(!/textContent\s*=\s*(err|code)\b/.test(html), 'a URL value is displayed');
+});
