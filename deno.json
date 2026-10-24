@@ -1,7 +1,7 @@
 {
   "tasks": {
     "dev": "deno run --allow-net --allow-read --allow-env server/main.ts",
-    "test": "deno test --no-prompt --allow-read=.well-known,server,s.html server/",
+    "test": "deno test --no-prompt --allow-read=.well-known,server,s.html,. server/",
     "golden": "deno run --no-prompt --allow-read=server --allow-write=server/golden server/golden_update.ts",
     "wellknown": "deno run --no-prompt --allow-read=.well-known,server --allow-write=server/wellknown.ts server/wellknown_update.ts"
   },
