@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-wmCu/f6spk3BMQNuLE66ZZhGgvzNnYU7ApCY8KfCz7o='; style-src 'sha256-4qZzinmlXEn6l+Q93nGpcJiIVgle5mMWmjEFI3xby18='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' https://ppqormwtsuprottekulj.supabase.co data:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-n4d4WjZw0mCzwxgQdKKtf/D0GlmnDa/8rZyopkLb79I='; style-src 'sha256-4qZzinmlXEn6l+Q93nGpcJiIVgle5mMWmjEFI3xby18='; connect-src https://ppqormwtsuprottekulj.supabase.co; img-src 'self' https://ppqormwtsuprottekulj.supabase.co data:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Logosell</title>
@@ -48,9 +48,10 @@ a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decorat
 <p class="sub" id="sub"></p>
 <div class="card"><p class="flush muted" id="body"></p></div>
 <p class="muted" id="meta"></p>
-<a class="btn" href="https://logosell.app/">Open in Logosell</a>
+<a class="btn" id="open" href="https://app.logosell.app/">Open it in the web app</a>
 <p class="foot">Logosell members meet in person to buy and sell. Nothing is paid through the app.
-<br><br><a href="/">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a></p>
+<br><br><a href="/">About</a> · <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
+· <a href="https://app.logosell.app/legal/contact">Contact</a> · <a id="report" href="https://app.logosell.app/report-content">Report content</a></p>
 </div>
 <script>(function () {
   // Rendered here rather than by an edge function because Supabase rewrites
@@ -119,6 +120,15 @@ a.btn{display:block;text-align:center;background:#1C5B4E;color:#fff;text-decorat
         if (d.rating_count) bits.push(Number(d.rating).toFixed(1) + '\u2605 from ' + d.rating_count + ' review' + (d.rating_count === 1 ? '' : 's'));
         set('body', bits.join(' \u00B7 '));
         set('meta', 'Member levels come from a confirmed email and two-step sign-in, vouches from other members, and deals confirmed in the app. They are not identity checks.');
+      }
+      // The same page in the web app, which opens on any phone; `kind` and `id`
+      // passed the two patterns above, so nothing else reaches the URL.
+      var open = document.getElementById('open');
+      if (open) open.href = 'https://app.logosell.app/' + kind + '/' + id;
+      var rep = document.getElementById('report');
+      if (rep && kind === 'listing') {
+        rep.href = 'https://app.logosell.app/report-content?listing=' + encodeURIComponent(id);
+        rep.textContent = 'Report this listing';
       }
       show('item');
     })

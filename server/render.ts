@@ -133,6 +133,7 @@ h1{font-size:22px;margin:0;line-height:1.25}
 .nolink{text-decoration:none}
 .gap{margin-top:12px}
 .chips{margin:12px 0}
+.links a{color:inherit}
 @media(prefers-color-scheme:dark){
   :root{--ink:#e8efec;--bg:#0e1613;--surface:#131d1a;--line:#25332e;--muted:#93a29c}
   .badge{background:#1b2d27;color:#8fe0bf}}`;
@@ -164,6 +165,24 @@ ${extra}
  *  nothing it cannot deliver today. */
 const LAUNCH_NOTE =
   'Logosell is a UK marketplace built around meeting safely, in person. Starting in Hounslow.';
+
+/** The web app. Members and visitors without the Android app open a listing or a
+ *  seller there; the old "Open in the app" link was logosell://, which does
+ *  nothing in a browser and nothing at all on an iPhone. A constant rather than
+ *  `origin`: the dev server runs on localhost but the web app does not. */
+export const WEB_APP = 'https://app.logosell.app';
+
+/** Terms, privacy, who runs Logosell, and how to report something, on every
+ *  rendered page. The contact page carries the trader's identity (it lives in the
+ *  web app, next to the legal texts it is generated from), and /report-content
+ *  works signed out, so a visitor who never joins can still report a listing. */
+function legalLinks(origin: string, listingId?: string): string {
+  const report = listingId
+    ? `<a href="${WEB_APP}/report-content?listing=${esc(encodeURIComponent(listingId))}">Report this listing</a>`
+    : `<a href="${WEB_APP}/report-content">Report content</a>`;
+  return `<p class="note muted links"><a href="${origin}/terms.html">Terms</a> · ` +
+    `<a href="${origin}/privacy.html">Privacy</a> · <a href="${WEB_APP}/legal/contact">Contact</a> · ${report}</p>`;
+}
 
 /*
   ── Shop mode: the helpers ──────────────────────────────────────────────────
@@ -346,10 +365,11 @@ ${head(`${title} — ${price} on Logosell`, og)}
       ${desc ? `<p class="muted gap">${desc}</p>` : ''}
       <p class="muted">Listed by ${seller}</p>
       <a class="cta" href="${origin}/">See Logosell</a>
-      <a class="cta2" href="logosell://listing/${esc(id)}">Already a member? Open in the app</a>
+      <a class="cta2" href="${WEB_APP}/listing/${esc(id)}">Open it in the web app</a>
     </div>
   </div>
   <p class="note muted">${LAUNCH_NOTE}</p>
+  ${legalLinks(origin, id)}
 </div></body></html>`;
 }
 
@@ -406,8 +426,10 @@ ${head(`${name} on Logosell`, og)}
       s.rating_count ? ` · ${esc(s.rating)}★ (${esc(s.rating_count)})` : ''}</p>
     ${rows || '<p class="muted">Nothing listed right now.</p>'}
     <a class="cta" href="${origin}/">See Logosell</a>
+    <a class="cta2" href="${WEB_APP}/seller/${esc(id)}">Open in the web app</a>
   </div></div>
   <p class="note muted">${LAUNCH_NOTE}</p>
+  ${legalLinks(origin)}
 </div></body></html>`;
 }
 
@@ -498,6 +520,7 @@ ${head(`${esc(title)} — Logosell`, og)}
     <a class="cta" href="${origin}/">See Logosell</a>
   </div></div>
   <p class="note muted">${LAUNCH_NOTE}</p>
+  ${legalLinks(origin)}
 </div></body></html>`;
 }
 
@@ -520,6 +543,7 @@ ${head('Logosell', `<meta name="robots" content="noindex">
     <a class="cta" href="${origin}/">See Logosell</a>
   </div></div>
   <p class="note muted">${LAUNCH_NOTE}</p>
+  ${legalLinks(origin)}
 </div></body></html>`;
 }
 
@@ -613,10 +637,11 @@ ${head(`${title} — ${name} on Logosell`, og)}
       <p class="muted">${SHOP_NOTE}</p>
       ${sellerId ? `<a class="cta" href="${origin}/seller/${esc(sellerId)}">See the shop</a>`
                  : `<a class="cta" href="${origin}/">See Logosell</a>`}
-      <a class="cta2" href="logosell://listing/${esc(id)}">Already a member? Open in the app</a>
+      <a class="cta2" href="${WEB_APP}/listing/${esc(id)}">Open it in the web app</a>
     </div>
   </div>
   <p class="note muted">${LAUNCH_NOTE}</p>
+  ${legalLinks(origin, id)}
 </div></body></html>`;
 }
 
@@ -668,7 +693,9 @@ ${head(`${name} on Logosell`, og)}
     <p class="muted">${SHOP_NOTE}</p>
     ${rows}
     <a class="cta" href="${origin}/">See Logosell</a>
+    <a class="cta2" href="${WEB_APP}/seller/${esc(id)}">Open the shop in the web app</a>
   </div></div>
   <p class="note muted">${LAUNCH_NOTE}</p>
+  ${legalLinks(origin)}
 </div></body></html>`;
 }

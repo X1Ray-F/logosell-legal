@@ -1,19 +1,19 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-wnoEn2miDS2RqCJ96JJFrqWKIBZrvW67sB1+eOVR1Qg='; style-src 'self' 'sha256-mj3F+zkF6i+tcZWzlMNpK42MEKRnA0vEphKq/HgbMfc='; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-AIATvMeMSNRcpDnGPVc6sXRDsJILpenFyoRotcP8xsw='; style-src 'self' 'sha256-4mRmTEA1Iz6H083psrl3PWzEPYP9ZdGA7Y5roNIcVhg='; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Logosell</title>
-<meta name="description" content="Coming soon.">
-<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="A UK marketplace for buying, selling and giving away things near you. Members meet and pay in person. Open it in the browser on any phone.">
+<meta name="robots" content="index, follow">
 <meta name="theme-color" content="#0f1c17">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Logosell">
-<meta property="og:title" content="Logosell — coming soon">
-<meta property="og:description" content="Something good is on its way.">
+<meta property="og:title" content="Logosell — buy and sell near you">
+<meta property="og:description" content="Members meet and pay in person. Open it in the browser on any phone, iPhone or Android.">
 <meta property="og:url" content="https://logosell.app/">
 <style>
 :root{--emer:#1C5B4E;--emer2:#2FB78F;--gold:#CBA75A;--ink:#F3F0EA;--dark:#0f1c17}
@@ -47,11 +47,14 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
 .foot{position:fixed;bottom:14px;left:0;right:0;text-align:center;color:#5f746c;font-size:12px}
 .foot a{color:#7f978e;text-decoration:none;margin:0 8px}
 .foot a:hover{color:#CFE9E0}
-.disc{opacity:.75}</style></head>
+.disc{opacity:.75}
+.webapp{display:inline-block;margin:0 0 18px;background:var(--emer2);color:var(--dark);font-weight:700;
+  padding:11px 24px;border-radius:99px;text-decoration:none;font-size:15px;box-shadow:0 10px 30px rgba(47,183,143,.25)}</style></head>
 <body>
 <div class="logo"><span>L</span></div>
 <h1>Logosell</h1>
-<p class="tag">Something good is on its way. ◆</p>
+<p class="tag">Buy and sell near you. Meet and pay in person. ◆</p>
+<a class="webapp" href="https://app.logosell.app/">Open the web app</a>
 
 <div class="stage">
   <canvas id="game" width="420" height="420" aria-label="Snake mini-game"></canvas>
@@ -65,7 +68,7 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
 <p class="hint">Collect the ◆. Pass through the walls — just don't bite yourself.</p>
 
 <div class="foot">
-  © 2026 Logosell · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a>
+  © 2026 Logosell · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="https://app.logosell.app/legal/contact">Contact</a> · <a href="https://app.logosell.app/report-content">Report content</a>
   <!--TRADING-DISCLOSURE-->
 </div>
 
@@ -88,7 +91,7 @@ canvas{display:block;border-radius:18px;background:rgba(255,255,255,.04);
   // Responsive, crisp canvas sized to the viewport.
   var cell = 22;
   function resize() {
-    var max = Math.min(window.innerWidth - 36, window.innerHeight - 300, 460);
+    var max = Math.min(window.innerWidth - 36, window.innerHeight - 380, 460);
     max = Math.max(220, max);
     cell = Math.floor(max / GRID);
     var px = cell * GRID;

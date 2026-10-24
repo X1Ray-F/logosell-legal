@@ -1,5 +1,8 @@
 import { assert, assertEquals, assertStringIncludes, assertFalse } from 'jsr:@std/assert@1';
-import { listingPage, sellerPage, zonePage, unavailablePage, sitemap, gbp, safeImage, zoneName } from './render.ts';
+import {
+  listingPage, sellerPage, zonePage, unavailablePage, shopListingPage, shopSellerPage, sitemap, gbp,
+  safeImage, zoneName, WEB_APP,
+} from './render.ts';
 
 const ORIGIN = 'https://logosell.app';
 const ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -173,4 +176,38 @@ Deno.test('no page uses an inline style attribute, which the CSP would block', (
     }),
   ];
   for (const p of pages) assertFalse(/<[^>]*\sstyle\s*=/i.test(p), 'inline style attribute found');
+});
+
+Deno.test('every page links to the terms, privacy, contact and report pages', () => {
+  const cat = { id: 'furniture', name: 'Furniture', emoji: null, n: 1 };
+  const seller = { display_name: 'Priya' };
+  const pages: Record<string, string> = {
+    listing: listingPage({ id: ID, listing: base, origin: ORIGIN }),
+    seller: sellerPage({ id: ID, seller, listings: [base], origin: ORIGIN }),
+    zone: zonePage({
+      zone: { slug: 'hounslow', name: 'Hounslow' }, listings: [base], categories: [cat], origin: ORIGIN,
+    }),
+    unavailable: unavailablePage(ORIGIN),
+    shopListing: shopListingPage({ id: ID, listing: base, origin: ORIGIN }),
+    shopSeller: shopSellerPage({ id: ID, seller, listings: [base], origin: ORIGIN }),
+  };
+  for (const [name, h] of Object.entries(pages)) {
+    assertStringIncludes(h, `<a href="${ORIGIN}/terms.html">Terms</a>`, name);
+    assertStringIncludes(h, `<a href="${ORIGIN}/privacy.html">Privacy</a>`, name);
+    assertStringIncludes(h, `<a href="${WEB_APP}/legal/contact">Contact</a>`, name);
+    assert(h.includes(`href="${WEB_APP}/report-content`), `${name}: no report link`);
+    // logosell:// does nothing in a browser and nothing on an iPhone.
+    assertFalse(h.includes('logosell://'), `${name}: a custom-scheme link is back`);
+  }
+  for (const name of ['listing', 'shopListing']) {
+    assertStringIncludes(pages[name], `<a href="${WEB_APP}/report-content?listing=${ID}">Report this listing</a>`);
+    assertStringIncludes(pages[name], `href="${WEB_APP}/listing/${ID}"`);
+  }
+  for (const name of ['seller', 'shopSeller']) assertStringIncludes(pages[name], `href="${WEB_APP}/seller/${ID}"`);
+});
+
+Deno.test('an id that is not a uuid cannot break out of the report link', () => {
+  const h = listingPage({ id: `x"><script>alert(1)</script>`, listing: base, origin: ORIGIN });
+  assertFalse(h.includes('<script>alert'));
+  assertStringIncludes(h, `${WEB_APP}/report-content?listing=x%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E"`);
 });
