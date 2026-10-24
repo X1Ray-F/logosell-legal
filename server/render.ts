@@ -129,6 +129,10 @@ h1{font-size:22px;margin:0;line-height:1.25}
 .thumb{width:64px;height:64px;border-radius:12px;object-fit:cover;background:#eee;flex:0 0 auto}
 .grow{min-width:0;flex:1}
 .ttl{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Classes in place of inline styles, which the CSP blocks: only this hashed block is allowed. */
+.nolink{text-decoration:none}
+.gap{margin-top:12px}
+.chips{margin:12px 0}
 @media(prefers-color-scheme:dark){
   :root{--ink:#e8efec;--bg:#0e1613;--surface:#131d1a;--line:#25332e;--muted:#93a29c}
   .badge{background:#1b2d27;color:#8fe0bf}}`;
@@ -337,9 +341,9 @@ ${head(`${title} — ${price} on Logosell`, og)}
       <h1>${title}</h1>
       <div class="price">${price}</div>
       <div>${cond ? `<span class="badge">${cond}</span>` : ''}${
-        l.zone_slug ? `<a class="badge" style="text-decoration:none" href="${origin}/${esc(l.zone_slug)}">📍 ${esc(zoneName(l.zone_slug))}</a>`
+        l.zone_slug ? `<a class="badge nolink" href="${origin}/${esc(l.zone_slug)}">📍 ${esc(zoneName(l.zone_slug))}</a>`
                     : city ? `<span class="badge">📍 ${city}</span>` : ''}</div>
-      ${desc ? `<p class="muted" style="margin-top:12px">${desc}</p>` : ''}
+      ${desc ? `<p class="muted gap">${desc}</p>` : ''}
       <p class="muted">Listed by ${seller}</p>
       <a class="cta" href="${origin}/">See Logosell</a>
       <a class="cta2" href="logosell://listing/${esc(id)}">Already a member? Open in the app</a>
@@ -435,10 +439,13 @@ export function zonePage(opts: {
   };
   const path = cat ? `/${esc(zone.slug)}/${esc(cat.id)}` : `/${esc(zone.slug)}`;
   const canonical = `${origin}${path}`;
-  const what = cat ? `${cat.name}` : 'Second-hand things';
+  // `title` stays raw text and is escaped exactly once, where it is written out.
+  // It used to carry esc(zone.name) and then pass through esc() again, so a zone
+  // called "Houn<slow" came out as &amp;lt; in the HTML and as &lt; in the JSON-LD.
+  const what = esc(cat ? cat.name : 'Second-hand things');
   const title = cat
-    ? `${cat.name} for sale in ${esc(zone.name)}`
-    : `Buy and sell in ${esc(zone.name)}`;
+    ? `${cat.name} for sale in ${zone.name}`
+    : `Buy and sell in ${zone.name}`;
   const n = listings.length;
   const desc = esc(n
     ? `${n} ${n === 1 ? 'item' : 'items'} for sale in ${zone.name}` +
@@ -473,7 +480,7 @@ ${n ? `<script type="application/ld+json">${jsonLd}</script>` : ''}`;
   const chips = categories.map((c) =>
     c.id === cat?.id
       ? `<span class="badge">${esc(c.emoji ?? '')} ${esc(c.name)} · ${c.n}</span>`
-      : `<a class="badge" style="text-decoration:none" href="${origin}/${esc(zone.slug)}/${esc(c.id)}">${
+      : `<a class="badge nolink" href="${origin}/${esc(zone.slug)}/${esc(c.id)}">${
           esc(c.emoji ?? '')} ${esc(c.name)} · ${c.n}</a>`).join('');
 
   return `<!doctype html>
@@ -485,7 +492,7 @@ ${head(`${esc(title)} — Logosell`, og)}
     <h1>${esc(title)}</h1>
     <p class="muted">${what} in ${esc(zone.name)}, collected in person.${
       cat ? ` <a href="${origin}/${esc(zone.slug)}">All categories</a>` : ''}</p>
-    ${chips ? `<div style="margin:12px 0">${chips}</div>` : ''}
+    ${chips ? `<div class="chips">${chips}</div>` : ''}
     ${n ? listings.map((l) => listingRow(l, origin, asShop(l))).join('\n')
         : '<p class="muted">Nothing listed here yet.</p>'}
     <a class="cta" href="${origin}/">See Logosell</a>

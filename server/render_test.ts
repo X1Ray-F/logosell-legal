@@ -145,3 +145,32 @@ Deno.test('a hostile zone name cannot break out of the page', () => {
   assertFalse(h.includes('<script>alert'));
   assertStringIncludes(h, '&lt;script&gt;');
 });
+
+Deno.test('a zone page escapes its title once, and the JSON-LD carries the raw text', () => {
+  const zone = { slug: 'x', name: 'Houn<slow & Co' };
+  const cat = { id: 'furniture', name: 'Tables <b>&</b> chairs', emoji: null, n: 1 };
+  const h = zonePage({
+    zone, listings: [base], categories: [cat], activeCategory: cat, origin: ORIGIN,
+  });
+  assertFalse(h.includes('&amp;lt;') || h.includes('&amp;amp;'), 'something was escaped twice');
+  assertStringIncludes(h, '<h1>Tables &lt;b&gt;&amp;&lt;/b&gt; chairs for sale in Houn&lt;slow &amp; Co</h1>');
+  // The lead-in paragraph used to print the category name without escaping it.
+  assertFalse(h.includes('<b>'), 'a category name reached the page as markup');
+  const m = /<script type="application\/ld\+json">(.*?)<\/script>/s.exec(h);
+  assert(m);
+  assertFalse(m[1].includes('<'), 'JSON-LD must not contain a raw <');
+  assertEquals(JSON.parse(m[1]).name, 'Tables <b>&</b> chairs for sale in Houn<slow & Co');
+});
+
+Deno.test('no page uses an inline style attribute, which the CSP would block', () => {
+  const cat = { id: 'furniture', name: 'Furniture', emoji: null, n: 1 };
+  const pages = [
+    listingPage({ id: ID, listing: { ...base, zone_slug: 'hounslow' }, origin: ORIGIN }),
+    listingPage({ id: ID, listing: base, origin: ORIGIN }),
+    zonePage({
+      zone: { slug: 'hounslow', name: 'Hounslow' }, listings: [base], categories: [cat],
+      origin: ORIGIN,
+    }),
+  ];
+  for (const p of pages) assertFalse(/<[^>]*\sstyle\s*=/i.test(p), 'inline style attribute found');
+});
