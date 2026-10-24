@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertStringIncludes, assertFalse } from 'jsr:@std/assert@1';
 import {
   fetchListing, fetchPublicListings, fetchSeller, fetchShop, fetchTraderIds, fetchZoneListings,
-  resetTraderCache, UUID_RE,
+  fetchCategories, resetCatalogCache, resetTraderCache, UUID_RE,
 } from './data.ts';
 
 const env = { url: 'https://db.example.co', anon: 'anon-key' };
@@ -363,4 +363,25 @@ Deno.test('every listing read selects seller_id, which shop mode is decided from
     const sellerListings = new URL(listingReads[1]);
     assertEquals(sellerListings.searchParams.get('limit'), '40');
   });
+});
+
+Deno.test('the category list is read once an hour, and a failed read neither empties nor poisons it', async () => {
+  resetCatalogCache();
+  let ok = true;
+  const f = stubFetch(() => ok ? { body: [{ id: 'furniture', name: 'Furniture', emoji: null }] } : { ok: false });
+  try {
+    // Nothing cached and the read fails: unknown (null), not "no categories".
+    ok = false;
+    assertEquals(await fetchCategories(env, 0), null);
+    ok = true;
+    assertEquals((await fetchCategories(env, 1))?.map((c) => c.id), ['furniture']);
+    assertEquals(f.calls.length, 2);
+    // Within the hour: no more reads.
+    await fetchCategories(env, 30 * 60 * 1000);
+    assertEquals(f.calls.length, 2);
+    // Past the hour with the database down: the old list stands.
+    ok = false;
+    assertEquals((await fetchCategories(env, 61 * 60 * 1000))?.map((c) => c.id), ['furniture']);
+    assertEquals(f.calls.length, 3);
+  } finally { f.restore(); resetCatalogCache(); }
 });

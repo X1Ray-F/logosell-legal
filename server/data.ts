@@ -127,14 +127,43 @@ export async function fetchZoneListings(
   return Array.isArray(rows) ? rows : [];
 }
 
+export interface Category { id: string; name: string; emoji: string | null }
+
+/**
+ * Every category, cached for an hour like the zone list: the set changes about
+ * as rarely, and it is read for every category page so that a made-up slug under
+ * a real zone (/hounslow/anything) is refused before any listing is queried.
+ * Without this a crawler inventing slugs paid for two listings reads and a
+ * categories read per guess.
+ *
+ * null means "could not be read and nothing is cached". Callers must treat that
+ * as "unknown", not as "no categories": a database blip would otherwise turn
+ * every category page into a 404.
+ */
+let categoryCache: { at: number; categories: Category[] } | null = null;
+
+export async function fetchCategories(env: Env, now = Date.now()): Promise<Category[] | null> {
+  if (categoryCache && now - categoryCache.at < ZONE_TTL_MS) return categoryCache.categories;
+  const rows = await rest<Category[]>(env, 'categories?select=id,name,emoji');
+  // Same rule as the zone list: a failed read keeps what we had.
+  if (!Array.isArray(rows)) return categoryCache?.categories ?? null;
+  categoryCache = { at: now, categories: rows };
+  return rows;
+}
+
+/** For tests: forget the cached zone and category lists. */
+export function resetCatalogCache(): void {
+  zoneCache = null;
+  categoryCache = null;
+}
+
 /** Which categories actually have something in this zone, for the page's own
  *  links. A category with nothing in it is a page Google would index as empty. */
 export async function fetchZoneCategories(
   env: Env, slug: string,
 ): Promise<CategoryCount[]> {
   const listings = await fetchZoneListings(env, slug, null, 200);
-  const names = await rest<{ id: string; name: string; emoji: string | null }[]>(
-    env, 'categories?select=id,name,emoji') ?? [];
+  const names = await fetchCategories(env) ?? [];
   const byId = new Map(names.map((c) => [c.id, c]));
   const counts = new Map<string, number>();
   for (const l of listings) {
@@ -174,8 +203,13 @@ export async function fetchPublicListings(
       cached read, with the RPC it would be one round trip per seller;
     * the answer to "is this seller a trader" is then a set lookup, so a request
       for a private seller's page costs nothing extra once the cache is warm;
-    * anon may read exactly these columns (profile_id, status) of verified rows,
-      and nothing about an address, so the list adds no reach (0143, 0149).
+    * the server selects only profile_id (filtered on status), which is all it
+      needs. Anon can in fact read more of a verified row than that: 0143 and
+      0149 leave business_name, kind, company_number and city readable too. None
+      of it is a postal address, and the list adds no reach beyond what a
+      logged-out member of the app can already see, but that is a property of
+      the database policy, not of this query, so do not select more here than
+      the decision needs.
 
   shop_front is still used, but only to dress a shop page (name, hours): losing
   it degrades the header, never the rule.

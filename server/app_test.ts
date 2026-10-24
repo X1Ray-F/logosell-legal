@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from 'jsr:@std/assert@1';
-import { handle, originOf, ALLOWED_HOSTS, type Deps } from './app.ts';
+import { handle, originOf, isSourcePath, ALLOWED_HOSTS, type Deps } from './app.ts';
 
 const ID = '550e8400-e29b-41d4-a716-446655440000';
 const env = { url: 'https://db.example.co', anon: 'anon-key' };
@@ -33,6 +33,7 @@ function deps(over: Partial<Deps> = {}): Deps & { staticHits: string[] } {
       Promise.resolve(slug === 'hounslow' ? ZONE : null),
     fetchZoneListings: () => Promise.resolve([listing]),
     fetchZoneCategories: () => Promise.resolve(CATS),
+    fetchCategories: () => Promise.resolve([{ id: 'furniture', name: 'Furniture', emoji: '🪑' }]),
     // No network in a unit test. The default (the real reader) would answer "unknown",
     // and unknown fails closed, so these are what make a price page possible at all.
     fetchTraders: () => Promise.resolve(new Set<string>()),
@@ -131,16 +132,32 @@ Deno.test('a forged Host header cannot plant its domain in canonical or og:url',
   assert(!body.includes('evil.example.com'));
 });
 
-Deno.test('a preview deployment links to itself', () => {
-  assertEquals(
-    originOf(new Request('https://logosell-x.deno.dev/listing/a'), ALLOWED_HOSTS),
-    'https://logosell-x.deno.dev');
-  assertEquals(
-    originOf(new Request('http://localhost:8000/listing/a'), ALLOWED_HOSTS),
-    'http://localhost:8000');
-  assertEquals(
-    originOf(new Request('https://logosell.app.evil.com/listing/a'), ALLOWED_HOSTS),
-    'https://logosell.app');
+Deno.test('only the public hosts and the one Deploy host name themselves', () => {
+  for (const [url, want] of [
+    ['https://logosell.app/listing/a', 'https://logosell.app'],
+    ['https://www.logosell.app/listing/a', 'https://www.logosell.app'],
+    [`${'https://logosell-web.x1ray-f.deno.net'}/listing/a`, 'https://logosell-web.x1ray-f.deno.net'],
+    // Anything else, however plausible, is the fallback: a forged or foreign Host
+    // must not become the canonical or sitemap origin.
+    ['https://logosell-x.deno.dev/listing/a', 'https://logosell.app'],
+    ['https://anything.x1ray-f.deno.net/listing/a', 'https://logosell.app'],
+    ['http://localhost:8000/listing/a', 'https://logosell.app'],
+    ['http://127.0.0.1:8000/listing/a', 'https://logosell.app'],
+    ['https://logosell.app.evil.com/listing/a', 'https://logosell.app'],
+    ['https://evil.logosell.app/listing/a', 'https://logosell.app'],
+  ] as const) {
+    assertEquals(originOf(new Request(url), ALLOWED_HOSTS), want, url);
+  }
+});
+
+Deno.test('localhost names itself only when the dev flag is on', async () => {
+  const prod = await (await handle(get('/hounslow', 'localhost:8000'), deps())).text();
+  assertStringIncludes(prod, '<link rel="canonical" href="https://logosell.app/hounslow">');
+  const dev = await (await handle(get('/hounslow', 'localhost:8000'), deps({ dev: true }))).text();
+  assertStringIncludes(dev, '<link rel="canonical" href="https://localhost:8000/hounslow">');
+  // The flag adds the local names and takes none of the others away.
+  const other = await (await handle(get('/hounslow', 'x.deno.dev'), deps({ dev: true }))).text();
+  assertStringIncludes(other, 'href="https://logosell.app/hounslow"');
 });
 
 Deno.test('a zone has a page a person could have searched for', async () => {
@@ -286,4 +303,121 @@ Deno.test('every ALLOWED_HOSTS entry is a bare host name that the matcher can re
     assert(!entry.includes('..'), `"${entry}" has an empty label`);
   }
   assert(ALLOWED_HOSTS.includes('logosell.app'));
+});
+
+/* ── Junk URLs, and what they cost ─────────────────────────────────────────────────────────── */
+
+Deno.test('an unknown category is refused before any listing is read', async () => {
+  let reads = 0;
+  const count = () => { reads++; return Promise.resolve([listing]); };
+  const d = deps({ fetchZoneListings: count, fetchZoneCategories: () => { reads++; return Promise.resolve(CATS); } });
+  const res = await handle(get('/hounslow/not-a-category'), d);
+  assertEquals(res.status, 404);
+  assertEquals(reads, 0, 'a made-up slug cost listing reads');
+  // A settled fact about the URL, so it may be cached briefly instead of no-store.
+  assertEquals(res.headers.get('Cache-Control'), 'public, max-age=60');
+  await res.body?.cancel();
+});
+
+Deno.test('an unreadable category list does not turn real category pages into 404s', async () => {
+  const d = deps({ fetchCategories: () => Promise.resolve(null) });
+  const res = await handle(get('/hounslow/furniture'), d);
+  assertEquals(res.status, 200);
+  await res.body?.cancel();
+});
+
+Deno.test('a known category that holds nothing here is a short-cached 404, remembered', async () => {
+  let reads = 0;
+  const d = deps({
+    fetchCategories: () => Promise.resolve([{ id: 'bikes', name: 'Bikes', emoji: null }]),
+    fetchZoneListings: () => { reads++; return Promise.resolve([]); },
+  });
+  for (let i = 0; i < 3; i++) {
+    const res = await handle(get('/hounslow/bikes'), d);
+    assertEquals(res.status, 404);
+    assertEquals(res.headers.get('Cache-Control'), 'public, max-age=60');
+    await res.body?.cancel();
+  }
+  assertEquals(reads, 1, 'the same empty category was read three times');
+});
+
+Deno.test('a zone page is built once per window, then again after it', async () => {
+  let reads = 0;
+  let t = 1_000_000;
+  const d = deps({
+    now: () => t,
+    fetchZoneListings: () => { reads++; return Promise.resolve([listing]); },
+  });
+  for (let i = 0; i < 3; i++) {
+    const res = await handle(get('/hounslow'), d);
+    assertEquals(res.status, 200);
+    assertStringIncludes(await res.text(), 'Buy and sell in Hounslow');
+  }
+  assertEquals(reads, 1);
+  // Another origin is another page: its links differ.
+  await (await handle(get('/hounslow', 'www.logosell.app'), d)).body?.cancel();
+  assertEquals(reads, 2);
+  t += 46_000;
+  await (await handle(get('/hounslow'), d)).body?.cancel();
+  assertEquals(reads, 3, 'a stale page was served');
+});
+
+Deno.test('the sitemap is built once per window', async () => {
+  let reads = 0;
+  let t = 5_000_000;
+  const d = deps({
+    now: () => t,
+    fetchPublicListings: () => { reads++; return Promise.resolve([{ id: ID, zone_slug: 'hounslow', category_id: 'furniture' }]); },
+  });
+  for (let i = 0; i < 3; i++) {
+    const res = await handle(get('/sitemap.xml'), d);
+    assertStringIncludes(await res.text(), `<loc>https://logosell.app/listing/${ID}</loc>`);
+  }
+  assertEquals(reads, 1);
+  t += 46_000;
+  await (await handle(get('/sitemap.xml'), d)).body?.cancel();
+  assertEquals(reads, 2);
+});
+
+/* ── Static files ──────────────────────────────────────────────────────────────────────────── */
+
+Deno.test('static files carry nosniff, a referrer policy and frame-ancestors', async () => {
+  const res = await handle(get('/m.html'), deps());
+  assertEquals(res.headers.get('X-Content-Type-Options'), 'nosniff');
+  assertEquals(res.headers.get('Referrer-Policy'), 'no-referrer');
+  assertEquals(res.headers.get('Content-Security-Policy'), "frame-ancestors 'none'");
+  await res.body?.cancel();
+});
+
+Deno.test('a static handler that already set a header keeps its own value', async () => {
+  const d = deps({
+    serveStatic: () => Promise.resolve(new Response('x', { headers: { 'Referrer-Policy': 'same-origin' } })),
+  });
+  const res = await handle(get('/m.html'), d);
+  assertEquals(res.headers.get('Referrer-Policy'), 'same-origin');
+  await res.body?.cancel();
+});
+
+Deno.test('repo-internal files are not part of the site', () => {
+  for (const p of ['/deno.json', '/deno.lock', '/CNAME', '/DENO.JSON', '/server/app.ts']) {
+    assert(isSourcePath(p), `${p} must be refused`);
+  }
+  for (const p of ['/', '/index.html', '/app-ads.txt', '/robots.txt', '/sitemap.xml', '/404.html']) {
+    assertEquals(isSourcePath(p), false, `${p} is content`);
+  }
+});
+
+Deno.test('only the public hosts may be indexed', async () => {
+  for (const [host, noindex] of [
+    ['logosell.app', false],
+    ['www.logosell.app', false],
+    ['logosell-web.x1ray-f.deno.net', true],
+    ['evil.example.com', true],
+  ] as const) {
+    for (const path of ['/privacy.html', '/hounslow', `/listing/${ID}`, '/sitemap.xml']) {
+      const res = await handle(get(path, host), deps());
+      assertEquals(res.headers.get('X-Robots-Tag'), noindex ? 'noindex' : null, `${host}${path}`);
+      await res.body?.cancel();
+    }
+  }
 });

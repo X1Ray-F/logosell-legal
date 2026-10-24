@@ -46,11 +46,22 @@ async function notFound(req: Request): Promise<Response> {
     const body = await Deno.readTextFile('./404.html');
     return new Response(body, {
       status: 404,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+      // Short rather than no-store: this answer needs no database, so letting a
+      // cache hold it for a minute only saves work, and the 404.html client-side
+      // routing does not depend on it being fresh.
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=60' },
     });
   } catch {
     return new Response('Not found', { status: 404 });
   }
 }
 
-Deno.serve((req) => handle(req, { env, serveStatic }));
+// Localhost and 127.0.0.1 may name themselves only when asked to, which
+// `deno task dev` does. On Deploy the variable is not set.
+const dev = Deno.env.get('LOGOSELL_DEV') === '1';
+
+// One Deps object for the life of the process: handle() keeps its page cache
+// per Deps, so building a new one for every request would defeat it.
+const deps: Deps = { env, serveStatic, dev };
+
+Deno.serve((req) => handle(req, deps));

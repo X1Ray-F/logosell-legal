@@ -24,7 +24,7 @@ import {
 } from './render.ts';
 import {
   fetchListing, fetchSeller, fetchPublicListings,
-  fetchZone, fetchZoneListings, fetchZoneCategories,
+  fetchZone, fetchZoneListings, fetchZoneCategories, fetchCategories,
   fetchTraderIds, fetchShop,
   UUID_RE, type Env,
 } from './data.ts';
@@ -41,6 +41,14 @@ export interface Deps {
   fetchZone?: typeof fetchZone;
   fetchZoneListings?: typeof fetchZoneListings;
   fetchZoneCategories?: typeof fetchZoneCategories;
+  /** The category list (cached an hour in data.ts). null = unreadable, which
+   *  means "unknown", never "there are none". */
+  fetchCategories?: typeof fetchCategories;
+  /** Also let localhost and 127.0.0.1 name themselves. Off in production: set
+   *  only by `deno task dev` (LOGOSELL_DEV=1), see main.ts. */
+  dev?: boolean;
+  /** Clock for the page cache; tests move it. */
+  now?: () => number;
   /** The verified traders. null = could not be read and nothing recent is cached;
    *  every route that prints a price then refuses to render. */
   fetchTraders?: typeof fetchTraderIds;
@@ -64,7 +72,19 @@ function csp(env: Env): string {
  *  status changes, and a cached page cannot be told. */
 const SHOP_MAX_AGE = 60;
 
-function html(body: string, env: Env, status = 200, maxAge = 300): Response {
+/** How long an answer of "there is no such page" may be cached. Short: long
+ *  enough that a link someone keeps pasting is not a fresh round trip every
+ *  time, short enough that a page which appears later is not hidden for long. */
+const NOT_FOUND_MAX_AGE = 60;
+
+/** How long a rendered zone page or the sitemap is kept in this process. It
+ *  absorbs a crawler or a link going round, so the same page is not rebuilt from
+ *  three database reads on every request. */
+const PAGE_TTL_MS = 45 * 1000;
+
+function html(
+  body: string, env: Env, status = 200, maxAge = 300, cacheable404 = false,
+): Response {
   return new Response(body, {
     status,
     headers: {
@@ -76,7 +96,12 @@ function html(body: string, env: Env, status = 200, maxAge = 300): Response {
       // database read, short enough that a price change shows up the same day.
       // A page that is gone is not cached at all, so a sold item stops
       // previewing as available as soon as it sells.
-      'Cache-Control': status === 200 ? `public, max-age=${maxAge}` : 'no-store',
+      // cacheable404 is only for a 404 that is a settled fact about the URL
+      // (a slug that is not a category). A refusal that comes from a failed
+      // read, such as the trader list, stays no-store: caching it would stretch
+      // an outage by the cache's lifetime.
+      'Cache-Control': status === 200 ? `public, max-age=${maxAge}`
+        : cacheable404 ? `public, max-age=${NOT_FOUND_MAX_AGE}` : 'no-store',
     },
   });
 }
@@ -90,24 +115,33 @@ export function originOf(req: Request, allowed: string[]): string {
   // hostname, not host: the allowlist holds bare names, and u.host carries the
   // port (localhost:8000), so comparing against it rejected every local run.
   const name = u.hostname.toLowerCase();
-  const ok = allowed.some((a) => name === a || name.endsWith('.' + a));
+  // Exact match only. A suffix match let anything under an allowed domain (any
+  // x.deno.dev) become the canonical and sitemap origin of this site.
+  const ok = allowed.includes(name);
   return ok ? `${u.protocol}//${u.host}` : 'https://logosell.app';
 }
 
 /**
- * Hosts whose own name may appear in canonical, og:url, links and the sitemap.
- *
- * `x1ray-f.deno.net` is the Deno Deploy organisation, so production
- * (logosell-web.x1ray-f.deno.net, see RUNBOOK.md) and any preview of this app
- * resolve to themselves. It used to say `deno.dev` — the old Deploy Classic
- * domain — so on the real host every canonical, og:url and sitemap entry fell
- * back to https://logosell.app, which was still GitHub Pages and answered 404
- * for /hounslow. app_test.ts reads the production host out of RUNBOOK.md and
- * fails if this list stops covering it.
+ * Hosts whose own name may appear in canonical, og:url, links and the sitemap:
+ * the site itself, and the one Deploy host this app runs on (RUNBOOK.md). Exact
+ * names, nothing matched by suffix. This list used to hold `deno.dev` and
+ * `localhost`, so a request for any x.deno.dev could plant its own host in every
+ * canonical tag and in the sitemap. A preview deployment on another host links
+ * back to production, which is the safe direction. app_test.ts reads the
+ * production host out of RUNBOOK.md and fails if it stops being covered.
  */
 export const ALLOWED_HOSTS = [
-  'logosell.app', 'x1ray-f.deno.net', 'deno.dev', 'localhost', '127.0.0.1',
+  'logosell.app', 'www.logosell.app', 'logosell-web.x1ray-f.deno.net',
 ];
+
+/** Added to ALLOWED_HOSTS only when Deps.dev is set, so a local run links to
+ *  itself while production never trusts a Host header of "localhost". */
+export const DEV_HOSTS = ['localhost', '127.0.0.1'];
+
+/** The hosts search engines may index. Anything else serving this site (the
+ *  *.deno.net host) is a duplicate of it, and the static legal pages there have
+ *  no canonical tag. */
+const INDEXABLE_HOSTS = ['logosell.app', 'www.logosell.app'];
 
 /**
  * The path a request is really asking for, or null when it cannot be one.
@@ -150,11 +184,69 @@ export function canonicalPath(raw: string): string | null {
  *  TypeScript — and the repository is private. Takes a path from
  *  canonicalPath, never a raw one. */
 export function isSourcePath(path: string): boolean {
-  return path === '/server' || path.startsWith('/server/');
+  const p = path.toLowerCase();
+  return p === '/server' || p.startsWith('/server/') || REPO_ONLY.has(p);
 }
 
+/** Files at the repository root that are tooling or hosting leftovers, not part
+ *  of the site: the Deno config and lockfile, and GitHub Pages' CNAME. */
+const REPO_ONLY = new Set(['/deno.json', '/deno.lock', '/cname']);
+
+/**
+ * Headers every static file gets, whatever it is. frame-ancestors only works as
+ * a header (a <meta> CSP ignores it), so this is the only way m.html and the
+ * other pages can refuse to be framed. It is a second policy beside each page's
+ * own <meta> one: a browser enforces both.
+ */
+const STATIC_HEADERS: Record<string, string> = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "frame-ancestors 'none'",
+};
+
+/** Response headers from fetch() or a file server can be immutable, so a
+ *  response that needs changing is rebuilt around the same body. */
+function withHeaders(res: Response, set: Record<string, string>, onlyMissing = false): Response {
+  const todo = Object.entries(set).filter(([k]) => !(onlyMissing && res.headers.has(k)));
+  if (todo.length === 0) return res;
+  const out = new Response(res.body, res);
+  for (const [k, v] of todo) out.headers.set(k, v);
+  return out;
+}
+
+/** Every answer on a host that is not the public site is marked noindex. */
+function finish(req: Request, res: Response): Response {
+  const host = new URL(req.url).hostname.toLowerCase();
+  return INDEXABLE_HOSTS.includes(host) ? res : withHeaders(res, { 'X-Robots-Tag': 'noindex' });
+}
+
+/** Stores a page, and drops everything stale first so the map cannot grow
+ *  without bound: the key includes the request path, which a crawler controls
+ *  (only paths that passed the zone and category checks reach here, but that is
+ *  still zones x categories x origins). */
+function remember(pages: Map<string, CachedPage>, key: string, page: CachedPage): void {
+  for (const [k, v] of pages) if (page.at - v.at >= PAGE_TTL_MS) pages.delete(k);
+  if (pages.size >= 500) pages.clear();
+  pages.set(key, page);
+}
+
+/** Rendered pages kept for PAGE_TTL_MS, per Deps object so that tests with
+ *  different fakes never see each other's pages. */
+type CachedPage = { at: number; status: number; body: string };
+const pageCaches = new WeakMap<Deps, Map<string, CachedPage>>();
+
 export async function handle(req: Request, deps: Deps): Promise<Response> {
+  return finish(req, await route(req, deps));
+}
+
+async function route(req: Request, deps: Deps): Promise<Response> {
   const { env } = deps;
+  const serveStatic = async (r: Request) =>
+    withHeaders(await deps.serveStatic(r), STATIC_HEADERS, true);
+  const now = deps.now ?? Date.now;
+  const pages = pageCaches.get(deps) ?? new Map<string, CachedPage>();
+  pageCaches.set(deps, pages);
+  const getCategories = deps.fetchCategories ?? fetchCategories;
   const getListing = deps.fetchListing ?? fetchListing;
   const getSeller = deps.fetchSeller ?? fetchSeller;
   const getPublic = deps.fetchPublicListings ?? fetchPublicListings;
@@ -174,8 +266,8 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
   const path = canonicalPath(url.pathname);
   // Not a path any rule below can match. The static handler answers it the way
   // it answers any unknown path, with 404.html.
-  if (path === null) return deps.serveStatic(req);
-  const origin = originOf(req, ALLOWED_HOSTS);
+  if (path === null) return serveStatic(req);
+  const origin = originOf(req, deps.dev ? [...ALLOWED_HOSTS, ...DEV_HOSTS] : ALLOWED_HOSTS);
   const isRead = req.method === 'GET' || req.method === 'HEAD';
 
   /*
@@ -293,6 +385,22 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     const [, slug, category] = zoneMatch;
     const zone = await getZone(env, slug);
     if (zone) {
+      // A made-up category under a real zone is refused here, against the cached
+      // category list, before any listing is read. Only a list that was really
+      // read can refuse: null (unreadable, nothing cached) means "don't know".
+      if (category) {
+        const known = await getCategories(env).catch(() => null);
+        if (known && !known.some((c) => c.id === category)) {
+          return html(unavailablePage(origin), env, 404, 0, true);
+        }
+      }
+      // The built page is kept for a short while, keyed by origin as well as
+      // path because the links inside it carry the origin.
+      const key = `${origin}${path}`;
+      const hit = pages.get(key);
+      if (hit && now() - hit.at < PAGE_TTL_MS) {
+        return html(hit.body, env, hit.status, 300, true);
+      }
       const [listings, categories, traders] = await Promise.all([
         getZoneListings(env, slug, category ?? null),
         getZoneCategories(env, slug),
@@ -302,33 +410,48 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
       // A category named in the URL that holds nothing in this zone is not a
       // page: it is a guess by a crawler, and it must not become an indexable
       // empty page with a plausible title.
-      if (category && !active) return html(unavailablePage(origin), env, 404);
+      if (category && !active) {
+        const body = unavailablePage(origin);
+        remember(pages, key, { at: now(), status: 404, body });
+        return html(body, env, 404, 0, true);
+      }
       // Shop mode, fail closed: a page with listings on it needs to know which
       // sellers are traders. A page with none prints no price, so it can go out
-      // even while the trader list is unreadable.
+      // even while the trader list is unreadable. Not remembered: it is a
+      // failed read, and the next request should try again.
       if (!traders && listings.length > 0) return html(unavailablePage(origin), env, 404);
-      return html(
-        zonePage({
-          zone, listings, categories, activeCategory: active, origin,
-          traders: traders ?? undefined,
-        }), env);
+      const body = zonePage({
+        zone, listings, categories, activeCategory: active, origin,
+        traders: traders ?? undefined,
+      });
+      remember(pages, key, { at: now(), status: 200, body });
+      return html(body, env);
     }
   }
 
   if (path === '/sitemap.xml') {
-    const listings = await getPublic(env);
-    // Only zones and zone+category pairs that actually hold something. Derived
-    // from the listings we just read, so it costs no extra query.
-    const zoneSet = new Set<string>();
-    for (const l of listings) {
-      const z = (l as { zone_slug?: string | null }).zone_slug;
-      const c = (l as { category_id?: string | null }).category_id;
-      if (!z) continue;
-      zoneSet.add(`/${z}`);
-      if (c) zoneSet.add(`/${z}/${c}`);
+    const key = `${origin}${path}`;
+    const hit = pages.get(key);
+    let xml: string;
+    if (hit && now() - hit.at < PAGE_TTL_MS) {
+      xml = hit.body;
+    } else {
+      const listings = await getPublic(env);
+      // Only zones and zone+category pairs that actually hold something. Derived
+      // from the listings we just read, so it costs no extra query.
+      const zoneSet = new Set<string>();
+      for (const l of listings) {
+        const z = (l as { zone_slug?: string | null }).zone_slug;
+        const c = (l as { category_id?: string | null }).category_id;
+        if (!z) continue;
+        zoneSet.add(`/${z}`);
+        if (c) zoneSet.add(`/${z}/${c}`);
+      }
+      const zonePaths = [...zoneSet].sort();
+      xml = sitemap({ origin, listings, zonePaths });
+      remember(pages, key, { at: now(), status: 200, body: xml });
     }
-    const zonePaths = [...zoneSet].sort();
-    return new Response(sitemap({ origin, listings, zonePaths }), {
+    return new Response(xml, {
       status: 200,
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
@@ -338,5 +461,5 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
     });
   }
 
-  return deps.serveStatic(req);
+  return serveStatic(req);
 }
